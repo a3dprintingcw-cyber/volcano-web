@@ -6,7 +6,7 @@ const CUSTOMER_KEY = 'volcano_customer_v1';
 const LAST_ORDER_KEY = 'volcano_last_order_v1';
 
 const $ = (id) => document.getElementById(id);
-const state = { menu: [], items: new Map(), info: null, availability: null, cart: store.get(CART_KEY, []) };
+const state = { menu: [], items: new Map(), info: null, availability: null, cart: store.get(CART_KEY, []), section: null };
 
 // ---------- loading ----------
 
@@ -58,25 +58,70 @@ function renderPage() {
   const todayHours = info.hours.find((h) => h.name === today);
   $('hero-hours').textContent = todayHours && todayHours.open != null ? `Today: ${todayHours.text}` : 'Closed today';
 
-  $('cats').innerHTML = state.menu.map((c) => `<a href="#${c.slug}">${esc(c.name)}</a>`).join('');
-
-  const main = $('menu');
-  main.setAttribute('aria-busy', 'false');
-  main.innerHTML = state.menu
-    .map(
-      (cat) => `
-      <section class="section" id="${cat.slug}" aria-labelledby="h-${cat.slug}">
-        <h2 id="h-${cat.slug}">${esc(cat.name)}</h2>
-        ${cat.note ? `<p class="section-note">${esc(cat.note)}</p>` : ''}
-        <ul class="items">${cat.items.map(itemRow).join('')}</ul>
-      </section>`
-    )
-    .join('');
-
-  watchSections();
+  // The menu shows one section at a time. Which one is open is kept in the
+  // address (#tacos), so a shared link or the back button lands on the same section.
+  const wanted = state.section || location.hash.slice(1);
+  state.section = (state.menu.find((c) => c.slug === wanted) || state.menu[0]).slug;
+  renderSection();
   renderCartBar();
   renderTracker();
 }
+
+function renderSection() {
+  const cat = state.menu.find((c) => c.slug === state.section);
+  $('cats').innerHTML = state.menu
+    .map(
+      (c) =>
+        `<button type="button" role="tab" id="tab-${c.slug}" data-section="${c.slug}" aria-selected="${c.slug === cat.slug}" aria-controls="menu">${esc(c.name)}</button>`
+    )
+    .join('');
+  const main = $('menu');
+  main.setAttribute('aria-busy', 'false');
+  main.setAttribute('aria-labelledby', `tab-${cat.slug}`);
+  main.innerHTML = `
+    <section class="section">
+      <h2>${esc(cat.name)}</h2>
+      ${cat.note ? `<p class="section-note">${esc(cat.note)}</p>` : ''}
+      <ul class="items">${cat.items.map(itemRow).join('')}</ul>
+    </section>`;
+  // Keep the open tab in view inside the tab bar, without moving the page.
+  const bar = $('cats');
+  const tab = $(`tab-${cat.slug}`);
+  bar.scrollLeft = tab.offsetLeft - (bar.clientWidth - tab.offsetWidth) / 2;
+}
+
+function openSection(slug, { fromHistory = false } = {}) {
+  if (!state.menu.some((c) => c.slug === slug) || slug === state.section) return;
+  state.section = slug;
+  renderSection();
+  if (!fromHistory) history.pushState(null, '', `#${slug}`);
+  // Start the new section at its top, just under the tab bar.
+  // (The tab bar sticks to the top of the screen, so its resting place is measured from the menu.)
+  const top = Math.max(0, Math.round($('menu').getBoundingClientRect().top + scrollY - $('cats').offsetHeight));
+  if (scrollY > top) scrollTo(0, top);
+}
+
+$('cats').addEventListener('click', (event) => {
+  const tab = event.target.closest('[data-section]');
+  if (tab) openSection(tab.dataset.section);
+});
+
+// Left and right arrow keys move between tabs.
+$('cats').addEventListener('keydown', (event) => {
+  if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft') return;
+  const index = state.menu.findIndex((c) => c.slug === state.section);
+  const next = state.menu[(index + (event.key === 'ArrowRight' ? 1 : -1) + state.menu.length) % state.menu.length];
+  openSection(next.slug);
+  $(`tab-${next.slug}`).focus();
+  event.preventDefault();
+});
+
+window.addEventListener('popstate', () => {
+  if (!state.menu.length) return;
+  const slug = location.hash.slice(1);
+  const known = state.menu.some((c) => c.slug === slug);
+  openSection(known ? slug : state.menu[0].slug, { fromHistory: true });
+});
 
 function itemRow(item) {
   const price = `${item.has_price_range ? '<small>from</small> ' : ''}${money(item.from_cents)}`;
@@ -94,24 +139,6 @@ function itemRow(item) {
         <span class="item-side">${photo}<span class="item-add" aria-hidden="true">+</span></span>
       </button>
     </li>`;
-}
-
-function watchSections() {
-  const links = new Map([...$('cats').querySelectorAll('a')].map((a) => [a.getAttribute('href').slice(1), a]));
-  const observer = new IntersectionObserver(
-    (entries) => {
-      for (const entry of entries) {
-        if (!entry.isIntersecting) continue;
-        for (const [slug, link] of links) {
-          const current = slug === entry.target.id;
-          link.setAttribute('aria-current', current ? 'true' : 'false');
-          if (current) link.scrollIntoView({ block: 'nearest', inline: 'center' });
-        }
-      }
-    },
-    { rootMargin: '-25% 0px -65% 0px' }
-  );
-  document.querySelectorAll('.section').forEach((s) => observer.observe(s));
 }
 
 // ---------- item dialog ----------
@@ -547,9 +574,7 @@ setInterval(async () => {
     if (changed) {
       state.menu = data.menu;
       state.items = new Map(data.menu.flatMap((c) => c.items).map((i) => [i.id, i]));
-      const y = scrollY;
       renderPage();
-      scrollTo(0, y);
     }
   } catch {
     /* try again next time */

@@ -15,7 +15,7 @@
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
-  <a class="skip" href="#menu">Skip to the menu</a>
+  <a class="skip" href="#cats">Skip to the menu</a>
 
   <header class="top">
     <div class="top-bar">
@@ -31,7 +31,7 @@
       <h1>Eruption of flavors</h1>
       <p class="hero-sub">Order here, pick it up hot.</p>
       <p class="hero-hours" id="hero-hours">Tuesday to Sunday, 6 PM to 12 AM</p>
-      <a class="btn btn-primary" href="#menu">See the menu</a>
+      <a class="btn btn-primary" href="#cats">See the menu</a>
     </div>
     <picture class="hero-photo">
       <source media="(min-width: 700px)" srcset="/img/spread-900.webp">
@@ -42,9 +42,9 @@
   <div class="notice" id="notice" hidden></div>
   <a class="tracker" id="tracker" hidden></a>
 
-  <nav class="cats" id="cats" aria-label="Menu sections"></nav>
+  <div class="cats" id="cats" role="tablist" aria-label="Menu sections"></div>
 
-  <main id="menu" class="menu" aria-busy="true">
+  <main id="menu" class="menu" role="tabpanel" aria-busy="true">
     <p class="loading">Loading the menu…</p>
   </main>
 
