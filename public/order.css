@@ -1,0 +1,21 @@
+.order-page { padding-bottom: 3rem; }
+.ticket { max-width: 34rem; margin: -1rem auto 0; padding: 0 1rem; }
+.ticket-card { background: var(--ash); color: var(--ink); border-radius: 1.4rem; overflow: hidden; }
+.ticket-head { padding: 1.4rem 1.2rem 1.1rem; text-align: center; background: var(--magma); }
+.ticket-head p { margin: 0; font-weight: 600; }
+.ticket-number { font-family: var(--display); font-size: clamp(3.6rem, 22vw, 5.5rem); line-height: 1; margin: 0.2rem 0; }
+.ticket-status { font-family: var(--display); text-transform: uppercase; font-size: 1.5rem; line-height: 1.1; color: var(--lava); padding: 1.2rem 1.2rem 0.2rem; text-align: center; }
+.ticket-detail { text-align: center; padding: 0 1.2rem 1rem; margin: 0; font-size: 1.05rem; }
+.steps { list-style: none; display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.4rem; margin: 0; padding: 0 1.2rem 1.2rem; }
+.steps li { text-align: center; font-weight: 600; font-size: 0.9rem; color: #8a7662; }
+.steps li::before { content: ''; display: block; height: 0.55rem; border-radius: 999px; background: #e3d0b0; margin-bottom: 0.4rem; }
+.steps li.is-done { color: var(--ink); }
+.steps li.is-done::before { background: var(--lava); }
+.steps li.is-now::before { background: var(--lava); animation: pulse 1.4s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: 0.45; } }
+.ticket-card .lines { border-top: 2px dashed #d9c5a3; }
+.ticket-meta { padding: 0.2rem 1.2rem 1.2rem; margin: 0; color: #5a4a3c; }
+.ticket-actions { display: grid; gap: 0.7rem; margin-top: 1.2rem; }
+.ticket-actions .btn { width: 100%; }
+.ticket-cancelled .ticket-head { background: #d9c5a3; }
+@media (prefers-reduced-motion: reduce) { .steps li.is-now::before { animation: none; } }

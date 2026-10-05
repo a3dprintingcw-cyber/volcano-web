@@ -1,0 +1,8 @@
+# Copy this file to .dev.vars for local development and choose your own values.
+# In production these are set as secrets, never committed:
+#   npx wrangler secret put STAFF_PIN
+#   npx wrangler secret put ADMIN_PIN
+#   npx wrangler secret put SESSION_SECRET
+STAFF_PIN=choose-a-kitchen-pin
+ADMIN_PIN=choose-a-manager-pin
+SESSION_SECRET=a-long-random-string

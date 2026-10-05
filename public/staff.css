@@ -1,0 +1,82 @@
+/* Kitchen board and admin. Built for a tablet on the counter: big type, big buttons. */
+.staff { padding-bottom: 2rem; }
+.staff-bar {
+  position: sticky; top: 0; z-index: 5; background: var(--lava);
+  display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem 1rem; padding: 0.6rem 1rem;
+}
+.staff-bar h1 { font-size: 1.25rem; margin-right: auto; }
+.staff-bar a { color: var(--ash); font-weight: 600; }
+.pill { border: 2px solid var(--ash); background: transparent; color: var(--ash); border-radius: 999px; padding: 0.4rem 0.9rem; font-weight: 600; min-height: 2.6rem; }
+.pill.is-on { background: var(--ash); color: var(--lava-deep); }
+.pill.is-warn { background: var(--magma); border-color: var(--magma); color: var(--ink); }
+.offline { background: var(--magma); color: var(--ink); text-align: center; font-weight: 700; padding: 0.5rem 1rem; }
+
+.login { max-width: 22rem; margin: 12vh auto 0; padding: 0 1rem; text-align: center; display: grid; gap: 1rem; justify-items: center; }
+.login img { width: 8rem; }
+.login h1 { font-size: 1.6rem; color: var(--magma); }
+.login form { display: grid; gap: 0.8rem; width: 100%; }
+.login input { width: 100%; padding: 0.9rem; border-radius: 0.8rem; border: 2px solid var(--ember); background: var(--char); color: var(--ash); font-size: 1.4rem; text-align: center; letter-spacing: 0.3em; }
+.login .error { margin: 0; }
+
+.board { display: grid; gap: 1rem; padding: 1rem; align-items: start; }
+@media (min-width: 60rem) { .board { grid-template-columns: repeat(3, 1fr); } }
+.col h2 { font-size: 1.3rem; color: var(--magma); display: flex; justify-content: space-between; align-items: baseline; padding: 0 0.2rem 0.6rem; }
+.col h2 span { font-family: var(--body); font-weight: 700; color: var(--smoke); font-size: 1rem; }
+.col-empty { color: var(--smoke); border: 2px dashed var(--ember); border-radius: 1rem; padding: 1.5rem 1rem; text-align: center; margin: 0; }
+.cards { display: grid; gap: 0.8rem; }
+.card { background: var(--ash); color: var(--ink); border-radius: 1rem; overflow: hidden; }
+.card-head { display: flex; align-items: center; gap: 0.8rem; padding: 0.7rem 0.9rem; background: var(--magma); }
+.card-number { font-family: var(--display); font-size: 2rem; line-height: 1; }
+.card-who { font-weight: 700; line-height: 1.2; min-width: 0; overflow-wrap: anywhere; }
+.card-who a { color: inherit; font-weight: 500; }
+.card-time { margin-left: auto; text-align: right; font-weight: 700; line-height: 1.2; white-space: nowrap; }
+.card-time small { display: block; font-weight: 600; }
+.card.is-late .card-head { background: var(--lava); color: var(--ash); }
+.card.is-fresh { animation: fresh 1s ease 3; }
+@keyframes fresh { 50% { box-shadow: 0 0 0 5px var(--magma); } }
+.card-lines { list-style: none; margin: 0; padding: 0.6rem 0.9rem; }
+.card-lines li { padding: 0.35rem 0; border-bottom: 1px solid #ead9bb; font-size: 1.1rem; font-weight: 700; }
+.card-lines li:last-child { border-bottom: 0; }
+.card-lines small { display: block; font-weight: 500; font-size: 0.98rem; color: #5a4a3c; }
+.card-lines .line-note { color: var(--lava-deep); font-weight: 700; }
+.card-note { margin: 0 0.9rem 0.6rem; padding: 0.5rem 0.7rem; background: #ffe4a8; border-radius: 0.6rem; font-weight: 600; }
+.card-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; padding: 0.6rem 0.9rem 0.9rem; }
+.card-total { font-weight: 700; margin-right: auto; }
+.card-foot .btn { min-height: 2.8rem; padding: 0.6rem 1.1rem; font-size: 0.95rem; }
+.card .btn-primary { background: var(--lava); color: var(--ash); box-shadow: 0 3px 0 var(--lava-deep); }
+.tag { border: 2px solid var(--ink); background: transparent; color: var(--ink); border-radius: 999px; padding: 0.3rem 0.8rem; font-weight: 700; min-height: 2.4rem; }
+.tag.is-paid { background: #2f6b3a; border-color: #2f6b3a; color: #fff; }
+.card .link { color: var(--lava-deep); }
+.done { padding: 0 1rem 2rem; }
+.done summary { cursor: pointer; font-weight: 700; padding: 0.6rem 0.2rem; color: var(--smoke); }
+.done table { width: 100%; border-collapse: collapse; }
+.done th, .done td { text-align: left; padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--ember); vertical-align: top; }
+.done th { color: var(--smoke); font-weight: 600; }
+
+/* admin */
+.admin { max-width: 52rem; margin: 0 auto; padding: 1rem; display: grid; gap: 1.2rem; }
+.panel { background: var(--char); border-radius: 1rem; padding: 1rem 1.1rem 1.2rem; }
+.panel h2 { font-size: 1.3rem; color: var(--magma); margin-bottom: 0.8rem; }
+.panel p { margin: 0 0 0.8rem; color: var(--smoke); }
+.row { display: grid; grid-template-columns: 1fr auto auto; gap: 0.6rem 0.8rem; align-items: center; padding: 0.55rem 0; border-top: 1px solid var(--ember); }
+.row.is-option { padding-left: 1.2rem; font-size: 0.95rem; }
+.row.is-option .row-name::before { content: '↳ '; color: var(--smoke); }
+.row-group { padding: 0.5rem 0 0.1rem 1.2rem; color: var(--smoke); font-weight: 600; font-size: 0.9rem; }
+.row-name { font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
+.row input[type='number'], .set input[type='number'], .set input[type='time'], .set input[type='text'] {
+  width: 6rem; padding: 0.5rem 0.6rem; border-radius: 0.6rem; border: 2px solid var(--ember); background: var(--coal); color: var(--ash);
+}
+.set input[type='time'] { width: 8.5rem; color-scheme: dark; }
+.set input[type='text'] { width: 100%; }
+.row input:disabled { opacity: 0.5; }
+.switch { display: inline-flex; align-items: center; gap: 0.5rem; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.switch input { width: 1.3rem; height: 1.3rem; accent-color: var(--magma); }
+.set { display: grid; gap: 0.8rem; }
+.set label { display: grid; gap: 0.3rem; font-weight: 600; }
+.set label.switch { display: inline-flex; gap: 0.5rem; }
+.day { display: grid; grid-template-columns: 6.5rem auto 1fr; gap: 0.6rem; align-items: center; padding: 0.4rem 0; border-top: 1px solid var(--ember); }
+.day-times { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
+.saved { position: fixed; left: 50%; bottom: 1.2rem; transform: translateX(-50%); background: var(--magma); color: var(--ink); font-weight: 700; padding: 0.6rem 1.2rem; border-radius: 999px; z-index: 20; }
+.saved.is-error { background: #f6c9bd; color: #5c1408; }
+.cat-title { font-family: var(--display); text-transform: uppercase; padding: 1rem 0 0.4rem; }
+@media (prefers-reduced-motion: reduce) { .card.is-fresh { animation: none; } }

@@ -1,0 +1,22 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "volcano-web",
+  "main": "src/worker.js",
+  "compatibility_date": "2026-09-01",
+  // The website files. Anything under /api/ goes to the Worker instead.
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "run_worker_first": ["/api/*"]
+  },
+  // The database. Before the first deploy, run "npx wrangler d1 create volcano"
+  // and paste the id it prints below.
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "volcano"
+      // , "database_id": "paste-the-id-here"
+    }
+  ],
+  "observability": { "enabled": true }
+}

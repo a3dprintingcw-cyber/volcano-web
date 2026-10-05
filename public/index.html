@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Volcano Street Food | Order for pickup</title>
+  <meta name="description" content="Order Volcano Street Food online and pick it up hot. Burgers, loaded fries, tacos, kapsalon and grill platters in Curaçao.">
+  <meta name="theme-color" content="#a43b25">
+  <meta property="og:title" content="Volcano Street Food">
+  <meta property="og:description" content="Eruption of flavors. Order online, pick up hot.">
+  <meta property="og:image" content="/img/spread-900.webp">
+  <link rel="icon" href="/img/icon-180.png">
+  <link rel="apple-touch-icon" href="/img/icon-180.png">
+  <link rel="preload" href="/fonts/bowlby-one-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <a class="skip" href="#menu">Skip to the menu</a>
+
+  <header class="top">
+    <div class="top-bar">
+      <a class="top-phone" id="phone-link" href="tel:+59995652266">+599 9 565 2266</a>
+      <span class="status" id="status" aria-live="polite"></span>
+    </div>
+    <div class="drip" aria-hidden="true"></div>
+  </header>
+
+  <section class="hero">
+    <div class="hero-text">
+      <img class="logo" src="/img/logo.png" width="224" height="225" alt="Volcano Street Food">
+      <h1>Eruption of flavors</h1>
+      <p class="hero-sub">Order here, pick it up hot.</p>
+      <p class="hero-hours" id="hero-hours">Tuesday to Sunday, 6 PM to 12 AM</p>
+      <a class="btn btn-primary" href="#menu">See the menu</a>
+    </div>
+    <picture class="hero-photo">
+      <source media="(min-width: 700px)" srcset="/img/spread-900.webp">
+      <img src="/img/spread-420.webp" alt="A table of Volcano dishes: loaded fries, wings, mac and cheese and crispy corn" width="420" height="560">
+    </picture>
+  </section>
+
+  <div class="notice" id="notice" hidden></div>
+  <a class="tracker" id="tracker" hidden></a>
+
+  <nav class="cats" id="cats" aria-label="Menu sections"></nav>
+
+  <main id="menu" class="menu" aria-busy="true">
+    <p class="loading">Loading the menu…</p>
+  </main>
+
+  <footer class="foot">
+    <div class="foot-inner">
+      <div>
+        <h2>Opening hours</h2>
+        <dl class="hours" id="hours"></dl>
+      </div>
+      <div>
+        <h2>Find us</h2>
+        <p><a id="foot-phone" href="tel:+59995652266">+599 9 565 2266</a></p>
+        <p>
+          <a href="https://www.instagram.com/volcanostreetfood" rel="noopener">Instagram</a>,
+          <a href="https://www.facebook.com/volcanostreetfood" rel="noopener">Facebook</a>,
+          <a href="https://www.tiktok.com/@volcanostreetfood" rel="noopener">TikTok</a>
+        </p>
+        <p class="muted">Ask for our vegetarian options.</p>
+      </div>
+    </div>
+  </footer>
+
+  <button class="cartbar" id="cartbar" type="button" hidden>
+    <span class="cartbar-count" id="cartbar-count">0</span>
+    <span class="cartbar-label">View your order</span>
+    <span class="cartbar-total" id="cartbar-total"></span>
+  </button>
+
+  <dialog class="sheet" id="item-dialog" aria-labelledby="item-title"></dialog>
+  <dialog class="sheet sheet-cart" id="cart-dialog" aria-labelledby="cart-title"></dialog>
+
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

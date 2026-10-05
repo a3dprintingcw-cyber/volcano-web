@@ -1,0 +1,18 @@
+{
+  "name": "volcano-web",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Volcano Street Food: pickup ordering website, kitchen board and backend",
+  "scripts": {
+    "dev": "wrangler dev",
+    "seed:build": "node scripts/build-seed.mjs",
+    "db:setup:local": "npm run seed:build && wrangler d1 execute DB --local --file=db/schema.sql && wrangler d1 execute DB --local --file=db/seed.sql",
+    "db:setup:remote": "npm run seed:build && wrangler d1 execute DB --remote --file=db/schema.sql && wrangler d1 execute DB --remote --file=db/seed.sql",
+    "deploy": "wrangler deploy",
+    "test": "node --test"
+  },
+  "devDependencies": {
+    "wrangler": "^4"
+  }
+}
