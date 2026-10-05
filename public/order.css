@@ -17,5 +17,7 @@
 .ticket-meta { padding: 0.2rem 1.2rem 1.2rem; margin: 0; color: #5a4a3c; }
 .ticket-actions { display: grid; gap: 0.7rem; margin-top: 1.2rem; }
 .ticket-actions .btn { width: 100%; }
+.ticket-actions .error { margin: 0; }
+.btn-cancel { border-color: var(--ember); color: var(--smoke); }
 .ticket-cancelled .ticket-head { background: #d9c5a3; }
 @media (prefers-reduced-motion: reduce) { .steps li.is-now::before { animation: none; } }

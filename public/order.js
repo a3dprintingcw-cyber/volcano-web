@@ -9,6 +9,35 @@ const id = params.get('id') || '';
 const returnedAttempt = params.get('attempt') || '';
 const loadedAt = Math.floor(Date.now() / 1000);
 let firstCheck = true;
+let lastStatus = null;
+let confirmingCancel = false;
+let cancelError = '';
+let latest = null;
+
+// Tell the customer the food is ready, even if the phone is in their pocket.
+function announceReady(order) {
+  try {
+    navigator.vibrate?.([300, 150, 300, 150, 300]);
+  } catch {
+    /* not supported */
+  }
+  try {
+    const audio = new AudioContext();
+    [0, 0.3, 0.6].forEach((delay, i) => {
+      const osc = audio.createOscillator();
+      const gain = audio.createGain();
+      osc.frequency.value = [660, 880, 1100][i];
+      gain.gain.setValueAtTime(0.25, audio.currentTime + delay);
+      gain.gain.exponentialRampToValueAtTime(0.001, audio.currentTime + delay + 0.25);
+      osc.connect(gain).connect(audio.destination);
+      osc.start(audio.currentTime + delay);
+      osc.stop(audio.currentTime + delay + 0.3);
+    });
+  } catch {
+    /* sound may be blocked until the page is tapped */
+  }
+  document.title = `Ready! Order ${order.number} | Volcano Street Food`;
+}
 const ticket = document.getElementById('ticket');
 const STEPS = ['new', 'preparing', 'ready'];
 const STEP_LABELS = { new: 'Received', preparing: 'Cooking', ready: 'Ready' };
@@ -75,11 +104,16 @@ function statusText(order) {
     case 'done':
       return ['Picked up', 'Enjoy your food, and thank you for ordering.'];
     default:
-      return ['Order cancelled', 'This order was cancelled. Call us if that is a surprise.'];
+      return order.cancelled_by === 'customer'
+        ? ['Order cancelled', 'You cancelled this order. Nothing is owed. You are welcome to order again.']
+        : ['Order cancelled', 'This order was cancelled. Call us if that is a surprise.'];
   }
 }
 
 function render({ order, info }) {
+  latest = { order, info };
+  if (lastStatus && lastStatus !== 'ready' && order.status === 'ready') announceReady(order);
+  lastStatus = order.status;
   const [title, detail] = statusText(order);
   const at = STEPS.indexOf(order.status === 'done' ? 'ready' : order.status);
   const awaiting = order.status === 'awaiting_payment';
@@ -94,7 +128,7 @@ function render({ order, info }) {
   const tel = `tel:${info.phone.replace(/[^\d+]/g, '')}`;
   document.getElementById('phone-link').href = tel;
   document.getElementById('phone-link').textContent = info.phone;
-  document.title = `#${order.number}: ${title} | Volcano Street Food`;
+  document.title = order.status === 'ready' ? `Ready! Order ${order.number} | Volcano Street Food` : `#${order.number}: ${title} | Volcano Street Food`;
 
   ticket.innerHTML = `
     <div class="ticket-card ${order.status === 'cancelled' ? 'ticket-cancelled' : ''}">
@@ -131,6 +165,8 @@ function render({ order, info }) {
     <div class="ticket-actions">
       ${payment && payment.retry && order.pay_url ? `<a class="btn btn-primary" href="${esc(order.pay_url)}">${payment.retryLabel}</a>` : ''}
       ${active ? `<a class="btn btn-quiet" href="${tel}">Need to change something? Call ${esc(info.phone)}</a>` : ''}
+      ${cancelError ? `<p class="error" role="alert">${esc(cancelError)}</p>` : ''}
+      ${order.can_cancel ? `<button class="btn btn-quiet btn-cancel" type="button" id="cancel-order">${confirmingCancel ? 'Tap again to cancel this order' : 'Cancel this order'}</button>` : ''}
       <a class="btn ${payment && payment.retry ? 'btn-quiet' : 'btn-primary'}" href="/">${active ? 'Back to the menu' : 'Order again'}</a>
     </div>`;
   return { active, awaiting };
@@ -164,6 +200,31 @@ async function refresh() {
     }
   }
 }
+
+// Cancelling takes two taps, so a slip of the thumb does not cancel dinner.
+ticket.addEventListener('click', async (event) => {
+  if (!event.target.closest('#cancel-order') || !latest) return;
+  if (!confirmingCancel) {
+    confirmingCancel = true;
+    cancelError = '';
+    render(latest);
+    setTimeout(() => {
+      if (!confirmingCancel) return;
+      confirmingCancel = false;
+      if (latest) render(latest);
+    }, 5000);
+    return;
+  }
+  confirmingCancel = false;
+  try {
+    const result = await api(`/api/orders/${encodeURIComponent(id)}/cancel`, { method: 'POST', body: {} });
+    cancelError = '';
+    render(result);
+  } catch (err) {
+    cancelError = err.message;
+    await refresh();
+  }
+});
 
 if (/^[0-9a-f-]{36}$/.test(id)) {
   refresh();

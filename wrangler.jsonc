@@ -22,5 +22,7 @@
   // Change to "production" only after Sentoo has approved the integration.
   // SENTOO_MERCHANT_ID and SENTOO_SECRET are set as Secrets in the Cloudflare dashboard.
   "vars": { "SENTOO_ENV": "sandbox" },
+  // Every 10 minutes: close online payments that were started and then abandoned.
+  "triggers": { "crons": ["*/10 * * * *"] },
   "observability": { "enabled": true }
 }

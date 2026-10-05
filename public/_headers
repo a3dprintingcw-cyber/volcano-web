@@ -1,0 +1,19 @@
+# Security headers for every page. The site loads nothing from other websites.
+/*
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()
+  Content-Security-Policy: default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; connect-src 'self'; font-src 'self'; manifest-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; object-src 'none'
+
+# Photos and fonts rarely change, so phones may keep them for a day.
+/img/*
+  Cache-Control: public, max-age=86400
+/fonts/*
+  Cache-Control: public, max-age=2592000, immutable
+
+# Staff pages and order pages are never stored by shared caches.
+/kitchen/*
+  Cache-Control: no-store
+/admin/*
+  Cache-Control: no-store

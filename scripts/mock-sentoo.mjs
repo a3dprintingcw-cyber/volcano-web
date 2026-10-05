@@ -79,6 +79,15 @@ createServer(async (req, res) => {
     });
   }
 
+  if (req.method === 'GET' && parts[0] === 'v1' && parts[1] === 'payment' && parts[2] === 'cancel') {
+    const t = transactions.get(parts[4]);
+    if (!t) return fail(res, 404, 'Transaction not found');
+    if (t.state === 'cancelled') return fail(res, 402, 'Transaction is already cancelled');
+    if (t.state === 'success' || t.state === 'pending') return fail(res, 402, 'The parameters were valid but the request failed');
+    t.state = 'cancelled';
+    return send(res, 200, { success: { code: 200, message: 'cancelled' } });
+  }
+
   if (req.method === 'GET' && parts[0] === 'v1' && parts[1] === 'payment' && parts[2] === 'status') {
     const t = transactions.get(parts[4]);
     if (!t) return fail(res, 404, 'Transaction not found');

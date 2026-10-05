@@ -23,6 +23,29 @@ scripts/     build-seed.mjs turns menu.mjs into db/seed.sql. mock-sentoo.mjs sta
 test/        price, opening-hours and payment tests
 ```
 
+## What each side can do
+
+Customers:
+- Browse the menu one section at a time, add dishes with their choices, and check out for pickup.
+- See the current wait time, which the kitchen sets.
+- Follow the order live. The page chimes, vibrates and changes its title when the food is ready.
+- Cancel their own order until the kitchen starts cooking (two taps). Orders already paid online have to be cancelled by phone, because of the refund.
+- "Order the same again" with one tap on their next visit.
+- Add the site to their phone's home screen, where it opens like an app.
+
+Kitchen (staff PIN):
+- Live board with New, Cooking and Ready for pickup. The browser tab shows how many new orders are waiting.
+- Wait time control (plus and minus 5 minutes) for busy moments.
+- WhatsApp the customer with the message already written, print a ticket, mark paid, cancel, pause online orders.
+
+Owner (manager PIN):
+- Sales today, the last 7 days and best sellers of the last 30 days.
+- Prices, sold-out switches, opening hours and settings.
+
+Behind the scenes:
+- Every 10 minutes the server closes online payments that were started and abandoned.
+- Security headers on every page (`public/_headers`): the site loads nothing from other websites and cannot be framed.
+
 ## How ordering works
 
 - Prices are always calculated on the server from the database. The browser only sends item ids and choices.

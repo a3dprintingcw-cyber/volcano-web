@@ -30,6 +30,19 @@ function beep() {
   }
 }
 
+// A WhatsApp link to the customer, with the message already written.
+// Local numbers are often typed without the country code, so 599 9 is added when missing.
+function whatsappLink(order) {
+  let digits = String(order.phone).replace(/\D/g, '');
+  if (digits.length === 7) digits = `5999${digits}`;
+  else if (digits.length === 8 && digits.startsWith('9')) digits = `599${digits}`;
+  const text =
+    order.status === 'ready'
+      ? `Hi ${order.customer_name}, your Volcano Street Food order ${order.number} is ready for pickup.`
+      : `Hi ${order.customer_name}, this is Volcano Street Food about your order ${order.number}. `;
+  return `https://wa.me/${digits}?text=${encodeURIComponent(text)}`;
+}
+
 function pickupLabel(order, serverTime) {
   const minutes = Math.round((order.pickup_at - serverTime) / 60);
   const rel = minutes >= 0 ? `in ${minutes} min` : `${-minutes} min late`;
@@ -66,9 +79,11 @@ function card(order, column, serverTime) {
         }
         <button class="btn btn-primary" type="button" data-status="${column.next}">${column.action}</button>
       </div>
-      <div class="card-foot" style="padding-top:0">
+      <div class="card-foot card-foot-links">
+        <a class="link" href="${esc(whatsappLink(order))}" target="_blank" rel="noopener">WhatsApp</a>
+        <button class="link" type="button" data-print>Print</button>
         ${column.back ? `<button class="link" type="button" data-status="${column.back}">Move back</button>` : ''}
-        <button class="link" type="button" data-cancel style="margin-left:auto">${confirming ? 'Tap again to cancel this order' : 'Cancel order'}</button>
+        <button class="link link-end" type="button" data-cancel>${confirming ? 'Tap again to cancel this order' : 'Cancel order'}</button>
       </div>
     </article>`;
 }
@@ -77,12 +92,20 @@ function render() {
   const { data } = state;
   const finished = data.orders.filter((o) => ['done', 'cancelled'].includes(o.status)).reverse();
   const taken = finished.filter((o) => o.status === 'done');
+  // The browser tab shows how many new orders are waiting.
+  const fresh = data.orders.filter((o) => o.status === 'new').length;
+  document.title = `${fresh ? `(${fresh}) ` : ''}Kitchen board | Volcano Street Food`;
   app.innerHTML = `
     <header class="staff-bar">
       <h1>Kitchen board</h1>
       <button class="pill ${data.ordering_paused ? 'is-warn' : ''}" type="button" data-pause="${data.ordering_paused ? '0' : '1'}" aria-pressed="${data.ordering_paused}">
         ${data.ordering_paused ? 'Online orders paused. Tap to resume' : 'Pause online orders'}
       </button>
+      <span class="wait" role="group" aria-label="Wait time customers are told">
+        <button class="pill" type="button" data-prep="-5" aria-label="5 minutes less" ${data.prep_minutes <= 5 ? 'disabled' : ''}>−</button>
+        <span class="wait-value">Wait ${data.prep_minutes} min</span>
+        <button class="pill" type="button" data-prep="5" aria-label="5 minutes more" ${data.prep_minutes >= 120 ? 'disabled' : ''}>+</button>
+      </span>
       <button class="pill ${state.sound ? 'is-on' : ''}" type="button" data-sound aria-pressed="${state.sound}">Sound ${state.sound ? 'on' : 'off'}</button>
       <a href="/admin/">Menu and hours</a>
       <button class="pill" type="button" data-signout>Sign out</button>
@@ -110,7 +133,11 @@ function render() {
                     ? `Picked up${o.payment_status === 'paid' ? (o.payment_method === 'sentoo' ? ', paid online' : ', paid') : ', not marked paid'}`
                     : o.payment_method === 'sentoo' && o.payment_status === 'paid'
                       ? 'Cancelled. Paid online: refund it in the Sentoo portal'
-                      : 'Cancelled'
+                      : o.cancelled_by === 'customer'
+                        ? 'Cancelled by the customer'
+                        : o.cancelled_by === 'payment'
+                          ? 'Cancelled, online payment not completed'
+                          : 'Cancelled'
                 }</td>
                 <td><button class="link" type="button" data-status="ready">Put back on the board</button></td></tr>`
               )
@@ -118,6 +145,19 @@ function render() {
           : '<p class="muted">Nothing finished yet.</p>'
       }
     </details>`;
+}
+
+// Prints one order as a kitchen ticket. Everything else on the page is hidden while printing.
+function printTicket(card) {
+  card.classList.add('is-printing');
+  document.body.classList.add('printing');
+  const done = () => {
+    card.classList.remove('is-printing');
+    document.body.classList.remove('printing');
+    window.removeEventListener('afterprint', done);
+  };
+  window.addEventListener('afterprint', done);
+  window.print();
 }
 
 async function refresh() {
@@ -133,6 +173,8 @@ async function refresh() {
       }
     }
     state.seen = new Set([...(state.seen || []), ...ids]);
+    // While a ticket is printing the board must not redraw underneath it.
+    if (document.body.classList.contains('printing')) return;
     state.data = data;
     state.offline = false;
   } catch (err) {
@@ -165,10 +207,15 @@ app.addEventListener('click', (event) => {
     if (state.sound) beep();
     return render();
   }
+  if (target.dataset.prep) {
+    const minutes = Math.min(120, Math.max(5, state.data.prep_minutes + Number(target.dataset.prep)));
+    return act(() => api('/api/staff/prep', { method: 'POST', body: { minutes } }));
+  }
   if ('pause' in target.dataset) {
     return act(() => api('/api/staff/pause', { method: 'POST', body: { paused: target.dataset.pause === '1' } }));
   }
   if (!id) return;
+  if ('print' in target.dataset) return printTicket(holder);
   if ('cancel' in target.dataset) {
     if (state.confirmCancel !== id) {
       state.confirmCancel = id;

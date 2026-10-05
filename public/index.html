@@ -10,9 +10,11 @@
   <meta property="og:description" content="Eruption of flavors. Order online, pick up hot.">
   <meta property="og:image" content="/img/spread-900.webp">
   <link rel="icon" href="/img/icon-180.png">
+  <link rel="manifest" href="/manifest.webmanifest">
   <link rel="apple-touch-icon" href="/img/icon-180.png">
   <link rel="preload" href="/fonts/bowlby-one-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="/styles.css">
+  <script type="application/ld+json">{"@context": "https://schema.org", "@type": "Restaurant", "name": "Volcano Street Food", "image": "/img/spread-900.webp", "telephone": "+59995652266", "servesCuisine": ["Street food", "Burgers", "Tacos", "Grill"], "priceRange": "$$", "address": {"@type": "PostalAddress", "addressCountry": "CW"}, "openingHoursSpecification": [{"@type": "OpeningHoursSpecification", "dayOfWeek": ["Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"], "opens": "18:00", "closes": "23:59"}], "potentialAction": {"@type": "OrderAction", "target": "/", "deliveryMethod": "http://purl.org/goodrelations/v1#DeliveryModePickUp"}}</script>
 </head>
 <body>
   <a class="skip" href="#cats">Skip to the menu</a>
@@ -31,6 +33,7 @@
       <h1>Eruption of flavors</h1>
       <p class="hero-sub">Order here, pick it up hot.</p>
       <p class="hero-hours" id="hero-hours">Tuesday to Sunday, 6 PM to 12 AM</p>
+      <p class="hero-wait" id="hero-wait" hidden></p>
       <a class="btn btn-primary" href="#cats">See the menu</a>
     </div>
     <picture class="hero-photo">
@@ -41,6 +44,7 @@
 
   <div class="notice" id="notice" hidden></div>
   <a class="tracker" id="tracker" hidden></a>
+  <button class="tracker tracker-again" id="again" type="button" hidden></button>
 
   <div class="cats" id="cats" role="tablist" aria-label="Menu sections"></div>
 

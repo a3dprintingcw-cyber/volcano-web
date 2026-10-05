@@ -48,6 +48,36 @@
 .tag { display: inline-flex; align-items: center; }
 .tag.is-paid { background: #2f6b3a; border-color: #2f6b3a; color: #fff; }
 .card .link { color: var(--lava-deep); }
+.card-foot-links { padding-top: 0; gap: 0.3rem 1rem; }
+.card-foot-links .link-end { margin-left: auto; }
+.wait { display: inline-flex; align-items: center; gap: 0.4rem; }
+.wait .pill { min-width: 2.6rem; padding: 0.4rem 0.6rem; font-size: 1.1rem; line-height: 1; }
+.wait .pill:disabled { opacity: 0.4; }
+.wait-value { font-weight: 700; min-width: 6.2rem; text-align: center; }
+
+/* Sales summary on the admin page */
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr)); gap: 0.7rem; margin-bottom: 1rem; }
+.stat { background: var(--coal); border-radius: 0.8rem; padding: 0.8rem 0.9rem; }
+.stat-value { display: block; white-space: nowrap; font-family: var(--display); font-size: 1.2rem; color: var(--ash); line-height: 1.15; }
+.stat-label { color: var(--smoke); font-size: 0.9rem; }
+.sales-table { width: 100%; border-collapse: collapse; margin-bottom: 1rem; }
+.sales-table th, .sales-table td { text-align: left; padding: 0.45rem 0.5rem; border-top: 1px solid var(--ember); }
+.sales-table th { color: var(--smoke); font-weight: 600; font-size: 0.9rem; }
+.sales-table td.num, .sales-table th.num { text-align: right; font-variant-numeric: tabular-nums; }
+.panel h3 { font-size: 1rem; margin: 0.4rem 0 0.5rem; color: var(--ash); }
+
+/* Printing a kitchen ticket: only the chosen order, black on white. */
+@media print {
+  body.printing { background: #fff; padding: 0; }
+  body.printing .staff-bar, body.printing .offline, body.printing .done, body.printing .col h2, body.printing .col-empty,
+  body.printing .card:not(.is-printing), body.printing .card-foot-links, body.printing .card .btn, body.printing .saved { display: none !important; }
+  body.printing .board { display: block; padding: 0; }
+  body.printing .card.is-printing { border-radius: 0; background: #fff; color: #000; max-width: 80mm; animation: none; }
+  body.printing .card.is-printing .card-head { background: #fff; color: #000; border-bottom: 2px solid #000; }
+  body.printing .card.is-printing .card-note { background: #fff; border: 1px solid #000; }
+  body.printing .card.is-printing .tag { border-color: #000; background: #fff; color: #000; }
+  body.printing .card.is-printing .card-who a { text-decoration: none; }
+}
 .done { padding: 0 1rem 2rem; }
 .done summary { cursor: pointer; font-weight: 700; padding: 0.6rem 0.2rem; color: var(--smoke); }
 .done table { width: 100%; border-collapse: collapse; }

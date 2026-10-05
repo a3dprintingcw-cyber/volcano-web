@@ -1,12 +1,13 @@
 // Menu, prices, sold-out switches and opening hours.
 // Staff PIN: sold-out switches and pausing orders. Manager PIN: everything.
-import { api, esc } from '/shared.js';
+import { api, esc, money } from '/shared.js';
 import { requireStaff, signOut } from '/staff-login.js';
 
 const app = document.getElementById('app');
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 let role = 'staff';
 let data = null;
+let sales = null;
 let toastTimer = null;
 
 const toTime = (minutes) => `${String(Math.floor((minutes % 1440) / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
@@ -44,6 +45,7 @@ function render() {
       <button class="pill" type="button" data-signout>Sign out</button>
     </header>
     <div class="admin">
+      ${salesPanel()}
       <section class="panel">
         <h2>Online ordering</h2>
         <div class="set">
@@ -119,6 +121,41 @@ function render() {
     </div>`;
 }
 
+const dayName = (iso) => new Date(`${iso}T12:00:00Z`).toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'short', timeZone: 'UTC' });
+
+// Sales figures, manager only. Cancelled orders and unpaid online orders are not counted.
+function salesPanel() {
+  if (role !== 'admin' || !sales) return '';
+  const t = sales.today;
+  return `
+    <section class="panel">
+      <h2>Sales</h2>
+      <div class="stats">
+        <div class="stat"><span class="stat-value">${money(t.total_cents || 0)}</span><span class="stat-label">Today</span></div>
+        <div class="stat"><span class="stat-value">${t.orders}</span><span class="stat-label">Orders today</span></div>
+        <div class="stat"><span class="stat-value">${money(t.average_cents)}</span><span class="stat-label">Average order</span></div>
+        <div class="stat"><span class="stat-value">${money(t.online_cents || 0)}</span><span class="stat-label">Paid online today</span></div>
+        <div class="stat"><span class="stat-value">${t.cancelled}</span><span class="stat-label">Cancelled today</span></div>
+      </div>
+      <h3>Last 7 days</h3>
+      ${
+        sales.days.length
+          ? `<table class="sales-table"><thead><tr><th>Day</th><th class="num">Orders</th><th class="num">Sales</th><th class="num">Paid online</th></tr></thead><tbody>
+              ${sales.days.map((d) => `<tr><td>${esc(dayName(d.day))}</td><td class="num">${d.orders}</td><td class="num">${money(d.total_cents)}</td><td class="num">${money(d.online_cents || 0)}</td></tr>`).join('')}
+            </tbody></table>`
+          : '<p>No orders in the last 7 days yet.</p>'
+      }
+      <h3>Best sellers, last 30 days</h3>
+      ${
+        sales.top_items.length
+          ? `<table class="sales-table"><thead><tr><th>Dish</th><th class="num">Sold</th><th class="num">Sales</th></tr></thead><tbody>
+              ${sales.top_items.map((i) => `<tr><td>${esc(i.name)}</td><td class="num">${i.quantity}</td><td class="num">${money(i.total_cents)}</td></tr>`).join('')}
+            </tbody></table>`
+          : '<p>Nothing sold yet.</p>'
+      }
+    </section>`;
+}
+
 async function save(run, message = 'Saved') {
   try {
     await run();
@@ -135,6 +172,7 @@ async function reload() {
   const fresh = await api('/api/staff/menu');
   data = fresh;
   role = fresh.role;
+  sales = role === 'admin' ? await api('/api/admin/sales').catch(() => null) : null;
 }
 
 function collectHours() {

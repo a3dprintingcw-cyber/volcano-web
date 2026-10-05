@@ -1,0 +1,14 @@
+{
+  "name": "Volcano Street Food",
+  "short_name": "Volcano",
+  "description": "Order Volcano Street Food online and pick it up hot.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#1e1e1e",
+  "theme_color": "#a43b25",
+  "icons": [
+    { "src": "/img/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/img/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

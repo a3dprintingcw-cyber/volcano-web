@@ -6,6 +6,7 @@ import { availability, describeHours, localClock } from './hours.js';
 import {
   PAYMENT_MINUTES,
   SentooError,
+  cancelPayment,
   createPayment,
   fetchPayment,
   lookupAllowed,
@@ -40,7 +41,12 @@ class HttpError extends Error {
 const json = (data, status = 200, headers = {}) =>
   new Response(JSON.stringify(data), {
     status,
-    headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', ...headers },
+    headers: {
+      'content-type': 'application/json; charset=utf-8',
+      'cache-control': 'no-store',
+      'x-content-type-options': 'nosniff',
+      ...headers,
+    },
   });
 
 const now = () => Math.floor(Date.now() / 1000);
@@ -357,7 +363,7 @@ async function startPayment(request, env, { id, number, total, created, offsetMi
   } catch (err) {
     // No payment link means the order cannot be paid: close it so it does not linger.
     await db
-      .prepare("UPDATE orders SET status = 'cancelled', payment_status = 'failed', updated_at = ? WHERE id = ? AND status = 'awaiting_payment'")
+      .prepare("UPDATE orders SET status = 'cancelled', cancelled_by = 'payment', payment_status = 'failed', updated_at = ? WHERE id = ? AND status = 'awaiting_payment'")
       .bind(now(), id)
       .run();
     if (err instanceof SentooError) {
@@ -404,7 +410,7 @@ async function syncPayment(env, order, kind) {
     await db.batch([
       record,
       db
-        .prepare("UPDATE orders SET status = 'cancelled', payment_status = 'failed' WHERE id = ? AND status = 'awaiting_payment'")
+        .prepare("UPDATE orders SET status = 'cancelled', cancelled_by = 'payment', payment_status = 'failed' WHERE id = ? AND status = 'awaiting_payment'")
         .bind(order.id),
     ]);
   } else {
@@ -431,6 +437,109 @@ async function sentooWebhook(request, env) {
     console.error('Sentoo webhook could not confirm the status', err.message);
     return json({ success: false }, 503);
   }
+}
+
+// A customer cancels their own order. Allowed only before the kitchen starts on it.
+async function customerCancel(env, id) {
+  const db = env.DB;
+  const order = await db.prepare('SELECT * FROM orders WHERE id = ?').bind(id).first();
+  if (!order) throw new HttpError(404, 'We could not find that order.');
+  const at = now();
+
+  if (order.status === 'awaiting_payment') {
+    if (order.pay_state === 'pending') {
+      throw new HttpError(409, 'Your bank is still processing the payment, so this order cannot be cancelled right now.');
+    }
+    // Close the payment link first, so the order cannot be paid after it is cancelled.
+    if (order.sentoo_transaction_id && sentooEnabled(env) && !(await cancelPayment(env, order.sentoo_transaction_id))) {
+      // Sentoo refuses when the payment went through in the meantime: find out which.
+      try {
+        await syncPayment(env, order, 'webhook');
+      } catch {
+        /* handled below */
+      }
+      const fresh = await db.prepare('SELECT status FROM orders WHERE id = ?').bind(id).first();
+      if (fresh.status !== 'awaiting_payment') return;
+      throw new HttpError(502, 'We could not cancel the payment just now. Please try again in a moment.');
+    }
+    await db
+      .prepare("UPDATE orders SET status = 'cancelled', cancelled_by = 'customer', payment_status = 'failed', pay_state = 'cancelled', updated_at = ? WHERE id = ? AND status = 'awaiting_payment'")
+      .bind(at, id)
+      .run();
+    return;
+  }
+
+  if (order.status === 'cancelled') return;
+  if (order.status !== 'new') {
+    throw new HttpError(409, 'The kitchen has already started on your order. Please call us if something needs to change.');
+  }
+  if (order.payment_method === 'sentoo' && order.payment_status === 'paid') {
+    throw new HttpError(409, 'This order is already paid. Please call us and we will cancel it and arrange your refund.');
+  }
+  const result = await db
+    .prepare("UPDATE orders SET status = 'cancelled', cancelled_by = 'customer', updated_at = ? WHERE id = ? AND status = 'new'")
+    .bind(at, id)
+    .run();
+  if (!result.meta.changes) {
+    throw new HttpError(409, 'The kitchen has just started on your order. Please call us if something needs to change.');
+  }
+}
+
+// Runs every few minutes (see "triggers" in wrangler.jsonc). Closes online payments
+// that were started and then abandoned, so they do not sit open forever.
+async function closeAbandonedPayments(env) {
+  const db = env.DB;
+  const at = now();
+  const { results } = await db
+    .prepare("SELECT * FROM orders WHERE status = 'awaiting_payment' AND created_at < ? ORDER BY created_at LIMIT 20")
+    .bind(at - (PAYMENT_MINUTES + 5) * 60)
+    .all();
+  for (const order of results) {
+    try {
+      // One last look: the payment may have gone through without us hearing about it.
+      await syncPayment(env, order, 'webhook');
+      const fresh = await db.prepare('SELECT status, pay_state FROM orders WHERE id = ?').bind(order.id).first();
+      if (fresh.status !== 'awaiting_payment' || fresh.pay_state === 'pending') continue;
+      if (order.sentoo_transaction_id && sentooEnabled(env) && !(await cancelPayment(env, order.sentoo_transaction_id))) continue;
+      await db
+        .prepare("UPDATE orders SET status = 'cancelled', cancelled_by = 'payment', payment_status = 'failed', updated_at = ? WHERE id = ? AND status = 'awaiting_payment'")
+        .bind(at, order.id)
+        .run();
+    } catch (err) {
+      console.error('Could not close abandoned payment', order.id, err.message);
+    }
+  }
+  await db.prepare('DELETE FROM rate_events WHERE at < ?').bind(at - 24 * 3600).run();
+}
+
+// Sales figures for the owner: today, the last 7 service days, and best sellers.
+async function salesSummary(db, settings) {
+  const clock = localClock(Date.now(), settings.timezone_offset_minutes);
+  const daysAgo = (n) => new Date(Date.parse(`${clock.date}T00:00:00Z`) - n * 86_400_000).toISOString().slice(0, 10);
+  const counted = "status IN ('new','preparing','ready','done')";
+  const [days, top, cancelled] = await db.batch([
+    db
+      .prepare(
+        `SELECT service_day AS day, COUNT(*) AS orders, SUM(total_cents) AS total_cents,
+                SUM(CASE WHEN payment_method = 'sentoo' AND payment_status = 'paid' THEN total_cents ELSE 0 END) AS online_cents
+         FROM orders WHERE ${counted} AND service_day >= ? GROUP BY service_day ORDER BY service_day DESC`
+      )
+      .bind(daysAgo(6)),
+    db
+      .prepare(
+        `SELECT oi.name AS name, SUM(oi.quantity) AS quantity, SUM(oi.quantity * oi.unit_price_cents) AS total_cents
+         FROM order_items oi JOIN orders o ON o.id = oi.order_id
+         WHERE o.${counted} AND o.service_day >= ? GROUP BY oi.name ORDER BY quantity DESC, total_cents DESC LIMIT 10`
+      )
+      .bind(daysAgo(29)),
+    db.prepare("SELECT COUNT(*) AS n FROM orders WHERE status = 'cancelled' AND cancelled_by != 'payment' AND service_day = ?").bind(clock.date),
+  ]);
+  const today = days.results.find((d) => d.day === clock.date) || { day: clock.date, orders: 0, total_cents: 0, online_cents: 0 };
+  return {
+    today: { ...today, cancelled: cancelled.results[0].n, average_cents: today.orders ? Math.round(today.total_cents / today.orders) : 0 },
+    days: days.results,
+    top_items: top.results,
+  };
 }
 
 async function loadOrders(db, where, binds) {
@@ -476,6 +585,11 @@ const customerView = (o) => ({
   pay_checked_at: o.pay_checked_at,
   // The same Sentoo link can be reused until the payment is final.
   pay_url: o.status === 'awaiting_payment' && ['issued', ''].includes(o.pay_state) ? o.pay_url : null,
+  cancelled_by: o.cancelled_by,
+  // The customer may cancel until the kitchen starts, unless it is already paid online.
+  can_cancel:
+    (o.status === 'new' && !(o.payment_method === 'sentoo' && o.payment_status === 'paid')) ||
+    (o.status === 'awaiting_payment' && o.pay_state !== 'pending'),
   created_at: o.created_at,
   items: o.items,
 });
@@ -636,6 +750,12 @@ async function handleApi(request, env, url) {
     return json({ order: customerView(order), info: publicInfo(settings, env) });
   }
   if (path === '/api/sentoo/webhook' && method === 'POST') return sentooWebhook(request, env);
+  if ((match = path.match(/^\/api\/orders\/([0-9a-f-]{36})\/cancel$/)) && method === 'POST') {
+    await customerCancel(env, match[1]);
+    const [order] = await loadOrders(db, 'id = ?', [match[1]]);
+    const settings = await loadSettings(db);
+    return json({ order: customerView(order), info: publicInfo(settings, env) });
+  }
 
   // Staff sign in
   if (path === '/api/staff/login' && method === 'POST') return login(request, env);
@@ -663,6 +783,7 @@ async function handleApi(request, env, url) {
       service_day: clock.date,
       ordering_paused: Boolean(settings.ordering_paused),
       payment_test: sentooEnabled(env) && sentooMode(env) === 'sandbox',
+      prep_minutes: settings.prep_minutes,
       availability: availability(settings, Date.now()),
       server_time: now(),
     });
@@ -674,10 +795,22 @@ async function handleApi(request, env, url) {
     if ('status' in body) {
       if (!STATUSES.includes(body.status)) throw new HttpError(400, 'Unknown status.');
       changes.status = body.status;
+      changes.cancelled_by = body.status === 'cancelled' ? 'staff' : '';
     }
     if ('paid' in body) changes.payment_status = body.paid ? 'paid' : 'unpaid';
     await updateRow(db, 'orders', match[1], changes);
     return json({ ok: true });
+  }
+  // The kitchen sets how long orders take right now, so customers get an honest pickup time.
+  if (path === '/api/staff/prep' && method === 'POST') {
+    await requireRole(request, env, 'staff');
+    const minutes = Number((await readJson(request)).minutes);
+    if (!Number.isInteger(minutes) || minutes < 5 || minutes > 120) throw new HttpError(400, 'Choose a wait time between 5 and 120 minutes.');
+    await db
+      .prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value')
+      .bind('prep_minutes', JSON.stringify(minutes))
+      .run();
+    return json({ ok: true, prep_minutes: minutes });
   }
   if (path === '/api/staff/pause' && method === 'POST') {
     await requireRole(request, env, 'staff');
@@ -723,6 +856,10 @@ async function handleApi(request, env, url) {
     await updateRow(db, 'options', Number(match[1]), changes);
     return json({ ok: true });
   }
+  if (path === '/api/admin/sales' && method === 'GET') {
+    await requireRole(request, env, 'admin');
+    return json(await salesSummary(db, await loadSettings(db)));
+  }
   if (path === '/api/admin/settings' && method === 'PUT') {
     await requireRole(request, env, 'admin');
     const current = await loadSettings(db);
@@ -754,6 +891,9 @@ export default {
       return json({ error: 'Something went wrong on our side. Please try again.' }, 500);
     }
   },
+  async scheduled(controller, env, ctx) {
+    ctx.waitUntil(closeAbandonedPayments(env));
+  },
 };
 
-export { priceLines };
+export { priceLines, closeAbandonedPayments };

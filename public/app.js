@@ -4,6 +4,7 @@ import { api, esc, money, store } from '/shared.js';
 const CART_KEY = 'volcano_cart_v1';
 const CUSTOMER_KEY = 'volcano_customer_v1';
 const LAST_ORDER_KEY = 'volcano_last_order_v1';
+const LAST_CART_KEY = 'volcano_last_cart_v1';
 
 const $ = (id) => document.getElementById(id);
 const state = { menu: [], items: new Map(), info: null, availability: null, cart: store.get(CART_KEY, []), section: null };
@@ -57,6 +58,10 @@ function renderPage() {
 
   const todayHours = info.hours.find((h) => h.name === today);
   $('hero-hours').textContent = todayHours && todayHours.open != null ? `Today: ${todayHours.text}` : 'Closed today';
+  // The kitchen sets the wait time, so this is what customers can really expect right now.
+  const wait = $('hero-wait');
+  wait.hidden = !(avail.can_order && avail.open_now);
+  wait.textContent = `Ready for pickup in about ${info.prep_minutes} minutes`;
 
   // The menu shows one section at a time. Which one is open is kept in the
   // address (#tacos), so a shared link or the back button lands on the same section.
@@ -308,6 +313,7 @@ function cartSummary() {
 }
 
 function renderCartBar(bump = false) {
+  if (state.items.size) renderAgain();
   const { count, total } = cartSummary();
   const bar = $('cartbar');
   bar.hidden = count === 0;
@@ -511,6 +517,7 @@ cartDialog.addEventListener('submit', async (event) => {
       },
     });
     store.set(LAST_ORDER_KEY, { id: order.id, number: order.number, at: Date.now() });
+    store.set(LAST_CART_KEY, state.cart);
     state.cart = [];
     saveCart();
     // Paying online: on to Sentoo's payment page. Sentoo sends the customer back to the order page.
@@ -537,7 +544,36 @@ cartDialog.addEventListener('submit', async (event) => {
 
 // ---------- last order link ----------
 
+// Lines from the previous order that are still on the menu today.
+function lastOrderLines() {
+  return store.get(LAST_CART_KEY, []).filter((line) => {
+    const item = state.items.get(line.item_id);
+    if (!item || !item.available || !Array.isArray(line.option_ids)) return false;
+    const options = new Map(item.groups.flatMap((g) => g.options).map((o) => [o.id, o]));
+    return line.option_ids.every((id) => options.has(id) && options.get(id).available);
+  });
+}
+
+function renderAgain() {
+  const lines = lastOrderLines();
+  const button = $('again');
+  button.hidden = lines.length === 0 || state.cart.length > 0;
+  if (button.hidden) return;
+  const names = lines.map((l) => `${l.quantity} × ${state.items.get(l.item_id).name}`);
+  button.textContent = `Order the same again: ${names.slice(0, 3).join(', ')}${names.length > 3 ? ` and ${names.length - 3} more` : ''}`;
+}
+
+$('again').addEventListener('click', () => {
+  state.cart = lastOrderLines().map((l) => ({ item_id: l.item_id, option_ids: l.option_ids, note: l.note || '', quantity: l.quantity }));
+  saveCart();
+  renderCartBar(true);
+  form.error = '';
+  renderCart();
+  cartDialog.showModal();
+});
+
 function renderTracker() {
+  renderAgain();
   const last = store.get(LAST_ORDER_KEY, null);
   const link = $('tracker');
   if (!last || Date.now() - last.at > 6 * 3600 * 1000) {
