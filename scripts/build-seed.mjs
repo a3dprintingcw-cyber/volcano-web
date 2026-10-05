@@ -1,5 +1,5 @@
 // Turns menu/menu.mjs into db/seed.sql.
-// Run with: npm run seed:build
+// Run with: npm run menu:build
 // The seed replaces the menu tables. It never touches orders.
 import { writeFileSync } from 'node:fs';
 import { menu, settings } from '../menu/menu.mjs';

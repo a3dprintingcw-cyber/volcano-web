@@ -6,11 +6,13 @@
   "description": "Volcano Street Food: pickup ordering website, kitchen board and backend",
   "scripts": {
     "dev": "wrangler dev",
-    "seed:build": "node scripts/build-seed.mjs",
-    "db:setup:local": "npm run seed:build && wrangler d1 execute DB --local --file=db/schema.sql && wrangler d1 execute DB --local --file=db/seed.sql",
-    "db:setup:remote": "npm run seed:build && wrangler d1 execute DB --remote --file=db/schema.sql && wrangler d1 execute DB --remote --file=db/seed.sql",
-    "deploy": "wrangler deploy",
-    "test": "node --test"
+    "test": "node --test",
+    "db:setup:local": "wrangler d1 migrations apply DB --local",
+    "db:setup:remote": "wrangler d1 migrations apply DB --remote",
+    "menu:build": "node scripts/build-seed.mjs",
+    "menu:reload:local": "npm run menu:build && wrangler d1 execute DB --local --file=db/seed.sql",
+    "menu:reload:remote": "npm run menu:build && wrangler d1 execute DB --remote --file=db/seed.sql",
+    "deploy": "wrangler d1 migrations apply DB --remote && wrangler deploy"
   },
   "devDependencies": {
     "wrangler": "^4"

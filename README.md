@@ -16,7 +16,8 @@ Everything runs on Cloudflare: one Worker serves the website and the API, and a 
 ```
 public/      the website (plain HTML, CSS and JavaScript, no build step)
 src/         the backend: worker.js (API) and hours.js (opening hours and pickup slots)
-db/          schema.sql (tables) and seed.sql (the menu, generated)
+migrations/  database setup, applied once and in order: tables, then the menu
+db/          seed.sql, the menu as SQL (generated from menu/menu.mjs)
 menu/        menu.mjs: the menu as transcribed from the printed menu
 scripts/     build-seed.mjs turns menu.mjs into db/seed.sql
 test/        price and opening-hours tests
@@ -45,25 +46,21 @@ npm test                           # checks prices against the menu and the open
 
 ## Put it online (Cloudflare)
 
-You need a free Cloudflare account. From this folder:
+The site is connected to this repository in Cloudflare (Workers & Pages, Workers Builds). Every push to `main` builds and publishes it with:
 
 ```
-npx wrangler login                 # opens Cloudflare in your browser
-npx wrangler d1 create volcano     # prints a database_id
+npm run deploy     # applies new database migrations, then publishes the Worker
 ```
 
-Paste that `database_id` into `wrangler.jsonc` where the comment says so. Then:
+The database is the D1 database named `volcano`. Its id is in `wrangler.jsonc`.
 
-```
-npm run db:setup:remote            # creates the tables and loads the menu
-npx wrangler deploy                # puts the site online
-```
+To publish by hand from your own computer instead: `npx wrangler login`, then `npm run deploy`.
 
-The site is then live at `https://volcano-web.<your-account>.workers.dev`. A custom domain can be attached later in the Cloudflare dashboard under the Worker's Settings, Domains and Routes.
+A custom domain can be attached later in the Cloudflare dashboard under the Worker's Settings, Domains and Routes.
 
 ### Staff access
 
-Set the two PINs and a session secret once. They are stored encrypted by Cloudflare and are never in this repository.
+Set the two PINs and a session secret once, in the Cloudflare dashboard under the Worker's Settings, Variables and Secrets (type: Secret), or from the command line. They are stored encrypted by Cloudflare and are never in this repository.
 
 ```
 npx wrangler secret put STAFF_PIN        # for the kitchen board
@@ -77,7 +74,7 @@ Use at least 6 digits for the staff PIN and a longer one for the manager PIN. Af
 
 Day to day, use `/admin/`: change prices, and switch items or single choices off when they sell out.
 
-To add or remove dishes, edit `menu/menu.mjs`, then run `npm run db:setup:remote`. This reloads the whole menu from the file, so prices changed on the admin page go back to what the file says. Orders and settings are kept.
+To add or remove dishes, edit `menu/menu.mjs`, then run `npm run menu:reload:remote`. This reloads the whole menu from the file, so prices changed on the admin page go back to what the file says. Orders and settings are kept.
 
 Photos live in `public/img/` as `name-420.webp` (list) and `name-900.webp` (detail). The `image` field of a dish in `menu.mjs` is that name.
 
