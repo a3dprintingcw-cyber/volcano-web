@@ -1,14 +1,70 @@
 // Order confirmation and live status for the customer.
 import { api, clockTime, esc, money } from '/shared.js';
 
-const id = new URLSearchParams(location.search).get('id') || '';
+const params = new URLSearchParams(location.search);
+const id = params.get('id') || '';
+// Sentoo adds the payment attempt status when it sends a customer back here.
+// The customer can edit it, so it is never used to decide whether an order is paid.
+// It may only make this page more careful (hide the "pay again" button while we check).
+const returnedAttempt = params.get('attempt') || '';
+const loadedAt = Math.floor(Date.now() / 1000);
+let firstCheck = true;
 const ticket = document.getElementById('ticket');
 const STEPS = ['new', 'preparing', 'ready'];
 const STEP_LABELS = { new: 'Received', preparing: 'Cooking', ready: 'Ready' };
 let timer = null;
 
+// What to tell a customer whose online payment is not confirmed yet.
+function paymentText(order) {
+  const checkedSinceReturn = order.pay_checked_at >= loadedAt - 5;
+  const attempt = order.pay_attempt;
+  const maybeInProgress =
+    order.pay_state === 'pending' ||
+    attempt === 'pending' ||
+    attempt === 'success' ||
+    (!checkedSinceReturn && ['pending', 'success'].includes(returnedAttempt));
+  if (maybeInProgress) {
+    return {
+      title: 'Confirming your payment',
+      detail: 'Your bank is still processing it. This usually takes less than a minute. Keep this page open and it will update by itself.',
+      retry: false,
+    };
+  }
+  if (order.pay_state === 'failed') {
+    return {
+      title: 'Payment problem',
+      detail: 'A technical problem stopped the payment and Sentoo has been notified. Please call us so we can sort out your order.',
+      retry: false,
+    };
+  }
+  if (attempt === 'rejected') {
+    return {
+      title: 'Payment was rejected',
+      detail: `${order.pay_message ? `Your bank said: ${order.pay_message}. ` : ''}Nothing was charged. You can try again, with another bank or card if you like.`,
+      retry: true,
+      retryLabel: 'Try payment again',
+    };
+  }
+  if (attempt === 'cancelled' || returnedAttempt === 'cancelled') {
+    return { title: 'Payment was cancelled', detail: 'Nothing was charged. Your order is held until it is paid.', retry: true, retryLabel: 'Try payment again' };
+  }
+  return {
+    title: 'Waiting for your payment',
+    detail: 'Your order goes to the kitchen as soon as it is paid.',
+    retry: true,
+    retryLabel: 'Pay now',
+  };
+}
+
 function statusText(order) {
   const time = clockTime(order.pickup_at);
+  if (order.status === 'awaiting_payment') {
+    const p = paymentText(order);
+    return [p.title, p.detail];
+  }
+  if (order.status === 'cancelled' && order.payment_method === 'sentoo' && order.payment_status !== 'paid') {
+    return ['Order cancelled', 'The payment was not completed in time, so this order was cancelled. Nothing was charged. You are welcome to order again.'];
+  }
   switch (order.status) {
     case 'new':
       return ['We got your order', `We will start cooking soon. Pick up around ${time}.`];
@@ -26,7 +82,15 @@ function statusText(order) {
 function render({ order, info }) {
   const [title, detail] = statusText(order);
   const at = STEPS.indexOf(order.status === 'done' ? 'ready' : order.status);
-  const active = ['new', 'preparing', 'ready'].includes(order.status);
+  const awaiting = order.status === 'awaiting_payment';
+  const payment = awaiting ? paymentText(order) : null;
+  const active = awaiting || ['new', 'preparing', 'ready'].includes(order.status);
+  const paidNote =
+    order.payment_status === 'paid'
+      ? `${order.payment_method === 'sentoo' ? 'Paid online' : 'Paid'}. Thank you.${info.payment_test && order.payment_method === 'sentoo' ? ' This was a test payment, no real money was charged.' : ''}`
+      : awaiting
+        ? 'Not paid yet.'
+        : 'Pay when you pick up your order.';
   const tel = `tel:${info.phone.replace(/[^\d+]/g, '')}`;
   document.getElementById('phone-link').href = tel;
   document.getElementById('phone-link').textContent = info.phone;
@@ -42,7 +106,7 @@ function render({ order, info }) {
       <h1 class="ticket-status">${title}</h1>
       <p class="ticket-detail">${esc(detail)}</p>
       ${
-        order.status === 'cancelled'
+        order.status === 'cancelled' || awaiting
           ? ''
           : `<ol class="steps">${STEPS.map(
               (s, i) =>
@@ -62,19 +126,34 @@ function render({ order, info }) {
           .join('')}
       </ul>
       <div class="total"><span>Total</span><span>${money(order.total_cents)}</span></div>
-      <p class="ticket-meta">${order.payment_status === 'paid' ? 'Paid. Thank you.' : 'Pay when you pick up your order.'}${order.notes ? `<br>Your note: ${esc(order.notes)}` : ''}</p>
+      <p class="ticket-meta">${esc(paidNote)}${order.notes ? `<br>Your note: ${esc(order.notes)}` : ''}</p>
     </div>
     <div class="ticket-actions">
+      ${payment && payment.retry && order.pay_url ? `<a class="btn btn-primary" href="${esc(order.pay_url)}">${payment.retryLabel}</a>` : ''}
       ${active ? `<a class="btn btn-quiet" href="${tel}">Need to change something? Call ${esc(info.phone)}</a>` : ''}
-      <a class="btn btn-primary" href="/">${active ? 'Back to the menu' : 'Order again'}</a>
+      <a class="btn ${payment && payment.retry ? 'btn-quiet' : 'btn-primary'}" href="/">${active ? 'Back to the menu' : 'Order again'}</a>
     </div>`;
-  return active;
+  return { active, awaiting };
 }
+
+let awaitingPayment = false;
 
 async function refresh() {
   try {
-    const data = await api(`/api/orders/${encodeURIComponent(id)}`);
-    const active = render(data);
+    // While an online payment is open we ask the server to confirm it with Sentoo.
+    // The server decides how often it really asks, so this is safe to call freely.
+    const check = awaitingPayment || (firstCheck && returnedAttempt);
+    const data = check
+      ? await api(`/api/orders/${encodeURIComponent(id)}/payment/check${firstCheck && returnedAttempt ? '?returned=1' : ''}`, { method: 'POST', body: {} })
+      : await api(`/api/orders/${encodeURIComponent(id)}`);
+    firstCheck = false;
+    const { active, awaiting } = render(data);
+    // The first plain load may reveal an unpaid order: confirm it straight away.
+    if (awaiting && !awaitingPayment) {
+      awaitingPayment = true;
+      return refresh();
+    }
+    awaitingPayment = awaiting;
     if (!active && timer) clearInterval(timer);
   } catch (err) {
     if (err.status === 404 || !ticket.querySelector('.ticket-card')) {

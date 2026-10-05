@@ -15,12 +15,12 @@ Everything runs on Cloudflare: one Worker serves the website and the API, and a 
 
 ```
 public/      the website (plain HTML, CSS and JavaScript, no build step)
-src/         the backend: worker.js (API) and hours.js (opening hours and pickup slots)
+src/         the backend: worker.js (API), hours.js (opening hours and pickup slots), sentoo.js (online payment)
 migrations/  database setup, applied once and in order: tables, then the menu
 db/          seed.sql, the menu as SQL (generated from menu/menu.mjs)
 menu/        menu.mjs: the menu as transcribed from the printed menu
-scripts/     build-seed.mjs turns menu.mjs into db/seed.sql
-test/        price and opening-hours tests
+scripts/     build-seed.mjs turns menu.mjs into db/seed.sql. mock-sentoo.mjs stands in for Sentoo locally
+test/        price, opening-hours and payment tests
 ```
 
 ## How ordering works
@@ -28,7 +28,7 @@ test/        price and opening-hours tests
 - Prices are always calculated on the server from the database. The browser only sends item ids and choices.
 - Orders are for the same day. Before opening, customers can pre-order for tonight. While open, they can choose "as soon as possible" or a 15 minute slot.
 - Online orders stop 15 minutes before closing. Preparation time is 20 minutes. Both can be changed on the admin page.
-- Payment is at pickup. The kitchen marks an order paid on the board. An online payment provider (Sentoo) can be added later: orders already carry a `payment_method` and `payment_status`.
+- Customers pay at pickup, or online through Sentoo when that is set up (see below). The kitchen marks pickup payments as paid on the board.
 - Orders with alcohol ask the customer to confirm they are 18 or older.
 - Times use Curaçao time (UTC-4), whatever the customer's phone is set to.
 
@@ -69,6 +69,31 @@ npx wrangler secret put SESSION_SECRET   # any long random text
 ```
 
 Use at least 6 digits for the staff PIN and a longer one for the manager PIN. After 8 wrong PINs from one network, sign-in is locked for 15 minutes. Changing `SESSION_SECRET` signs everyone out.
+
+## Online payment (Sentoo)
+
+Online payment switches on by itself once the two Sentoo details are set. Without them the site offers pay at pickup only.
+
+1. In the Cloudflare dashboard, open the `volcano-web` Worker, then Settings, then Variables and Secrets. Add both as type Secret:
+   - `SENTOO_MERCHANT_ID`: the merchant id from the Sentoo portal
+   - `SENTOO_SECRET`: the merchant secret from the Sentoo portal
+2. In the Sentoo portal (sandbox: https://portal.sandbox.sentoo.io), on the merchant edit page:
+   - add the site's hostname as an allowed hostname for the return URL, for example `volcano-web.a3dprinting.workers.dev`
+   - set the Payment status URL (webhook) to `https://<site>/api/sentoo/webhook`
+
+`SENTOO_ENV` in `wrangler.jsonc` chooses the Sentoo system: `sandbox` (test payments, no real money) or `production`. While it is `sandbox`, the checkout, the order page and the kitchen board all say the payment is a test.
+
+How it works:
+
+- An order paid online is created as `awaiting_payment` and is not shown to the kitchen. The customer is sent to Sentoo's payment page.
+- Sentoo sends the customer back to the order page and calls the webhook. Neither is trusted for the result: the server asks Sentoo's status API, and only that answer marks an order paid and releases it to the kitchen. Changing `attempt=` in the address does nothing.
+- A rejected or cancelled attempt keeps the same Sentoo link, so the customer can try again. If the payment expires (30 minutes) or is cancelled at Sentoo, the order is cancelled.
+- Sentoo allows 10 status lookups per transaction per hour. The server spaces its lookups to stay under that, however often the browser asks.
+- Refunds are made in the Sentoo portal. A cancelled order that was paid online is flagged on the kitchen board.
+
+Going live: Sentoo requires its test scenarios (TC001 to TC005 in their documentation) to be run in the sandbox and confirmed through their review form before they issue production details. After that, replace the two secrets with the production ones and set `SENTOO_ENV` to `production`.
+
+To try it locally without a Sentoo account, run `node scripts/mock-sentoo.mjs` and use the Sentoo lines from `.dev.vars.example`.
 
 ## Changing the menu
 

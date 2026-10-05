@@ -18,5 +18,9 @@
       "migrations_dir": "migrations"
     }
   ],
+  // Sentoo online payment. "sandbox" uses Sentoo's test system: no real money moves.
+  // Change to "production" only after Sentoo has approved the integration.
+  // SENTOO_MERCHANT_ID and SENTOO_SECRET are set as Secrets in the Cloudflare dashboard.
+  "vars": { "SENTOO_ENV": "sandbox" },
   "observability": { "enabled": true }
 }

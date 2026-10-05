@@ -3,6 +3,16 @@
 // Data lives in a D1 database bound as DB.
 
 import { availability, describeHours, localClock } from './hours.js';
+import {
+  PAYMENT_MINUTES,
+  SentooError,
+  createPayment,
+  fetchPayment,
+  lookupAllowed,
+  sentooEnabled,
+  sentooMode,
+  webhookTransactionId,
+} from './sentoo.js';
 
 const STATUSES = ['new', 'preparing', 'ready', 'done', 'cancelled'];
 const LIMITS = {
@@ -138,12 +148,16 @@ async function loadMenu(db) {
   }));
 }
 
-function publicInfo(settings) {
+function publicInfo(settings, env) {
   return {
     restaurant_name: settings.restaurant_name,
     phone: settings.phone,
     hours: describeHours(settings.hours),
     prep_minutes: settings.prep_minutes,
+    // Online payment is offered only when the Sentoo details are filled in.
+    online_payment: sentooEnabled(env),
+    // In the Sentoo sandbox no real money moves, and every screen says so.
+    payment_test: sentooEnabled(env) && sentooMode(env) === 'sandbox',
   };
 }
 
@@ -236,6 +250,10 @@ async function createOrder(request, env) {
   const digits = phone.replace(/\D/g, '');
   if (digits.length < 7 || digits.length > 15) throw new HttpError(400, 'Please enter a phone number we can reach you on.');
   const notes = cleanText(body.notes, LIMITS.notes);
+  const payOnline = body.payment === 'sentoo';
+  if (payOnline && !sentooEnabled(env)) {
+    throw new HttpError(400, 'Online payment is not available right now. Please choose to pay at pickup.');
+  }
 
   const [settings, menu] = await Promise.all([loadSettings(db), loadMenu(db)]);
   const avail = availability(settings, Date.now());
@@ -280,10 +298,25 @@ async function createOrder(request, env) {
       await db.batch([
         db
           .prepare(
-            `INSERT INTO orders (id, number, service_day, status, customer_name, phone, notes, pickup_type, pickup_at, total_cents, created_at, updated_at)
-             VALUES (?, ?, ?, 'new', ?, ?, ?, ?, ?, ?, ?, ?)`
+            `INSERT INTO orders (id, number, service_day, status, customer_name, phone, notes, pickup_type, pickup_at, total_cents, payment_method, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
           )
-          .bind(id, next.n, avail.service_day, name, phone, notes, pickupType, pickupAt, total, created, created),
+          .bind(
+            id,
+            next.n,
+            avail.service_day,
+            // An order paid online stays out of the kitchen until Sentoo confirms the payment.
+            payOnline ? 'awaiting_payment' : 'new',
+            name,
+            phone,
+            notes,
+            pickupType,
+            pickupAt,
+            total,
+            payOnline ? 'sentoo' : 'pickup',
+            created,
+            created
+          ),
         ...lines.map((l) =>
           db
             .prepare(
@@ -293,12 +326,111 @@ async function createOrder(request, env) {
         ),
       ]);
       await recordEvent(db, 'order', who);
-      return json({ id, number: next.n }, 201);
+      if (!payOnline) return json({ id, number: next.n }, 201);
+      return startPayment(request, env, { id, number: next.n, total, created, offsetMinutes: settings.timezone_offset_minutes });
     } catch (err) {
       if (!String(err && err.message).includes('UNIQUE')) throw err;
     }
   }
   throw new HttpError(503, 'We could not place your order just now. Please try again.');
+}
+
+// ---------- online payment (Sentoo) ----------
+
+async function startPayment(request, env, { id, number, total, created, offsetMinutes }) {
+  const db = env.DB;
+  try {
+    const payment = await createPayment(env, {
+      amountCents: total,
+      description: `Volcano Street Food order ${number}`,
+      // Sentoo adds the payment attempt status to the end of this address.
+      returnUrl: `${new URL(request.url).origin}/order?id=${id}&attempt=`,
+      customer: `Order ${number}`,
+      expiresAt: created + PAYMENT_MINUTES * 60,
+      offsetMinutes,
+    });
+    await db
+      .prepare("UPDATE orders SET sentoo_transaction_id = ?, pay_url = ?, pay_state = 'issued' WHERE id = ?")
+      .bind(payment.transactionId.toLowerCase(), payment.url, id)
+      .run();
+    return json({ id, number, pay_url: payment.url }, 201);
+  } catch (err) {
+    // No payment link means the order cannot be paid: close it so it does not linger.
+    await db
+      .prepare("UPDATE orders SET status = 'cancelled', payment_status = 'failed', updated_at = ? WHERE id = ? AND status = 'awaiting_payment'")
+      .bind(now(), id)
+      .run();
+    if (err instanceof SentooError) {
+      console.error('Sentoo payment could not be started', err.status, err.reference || '', err.message);
+      throw new HttpError(502, 'Online payment could not be started. Please try again, or choose to pay at pickup.');
+    }
+    throw err;
+  }
+}
+
+// Asks Sentoo for the status of an order's payment and records the answer.
+// This is the only place an order can become paid. It is safe to run many times.
+// kind is 'webhook', 'return' or 'poll'. Returns false when no lookup was made.
+async function syncPayment(env, order, kind) {
+  const db = env.DB;
+  if (order.payment_method !== 'sentoo' || !order.sentoo_transaction_id || !sentooEnabled(env)) return false;
+  if (['success', 'cancelled', 'expired'].includes(order.pay_state)) return false; // final, nothing more to learn
+  const at = now();
+  if (!lookupAllowed(order, at, kind)) return false;
+
+  const windowOpen = at - order.pay_window_start < 3600;
+  await db
+    .prepare('UPDATE orders SET pay_checks = ?, pay_window_start = ?, pay_checked_at = ? WHERE id = ?')
+    .bind(windowOpen ? order.pay_checks + 1 : 1, windowOpen ? order.pay_window_start : at, at, order.id)
+    .run();
+
+  const payment = await fetchPayment(env, order.sentoo_transaction_id);
+  const record = db
+    .prepare('UPDATE orders SET pay_state = ?, pay_attempt = ?, pay_message = ?, updated_at = ? WHERE id = ?')
+    .bind(payment.state, payment.attempt, payment.message, at, order.id);
+
+  if (payment.state === 'success') {
+    const settings = await loadSettings(db);
+    await db.batch([
+      record,
+      db.prepare("UPDATE orders SET payment_status = 'paid' WHERE id = ?").bind(order.id),
+      // Release the order to the kitchen exactly once. If paying took a while,
+      // the pickup time moves so the kitchen still gets its preparation time.
+      db
+        .prepare("UPDATE orders SET status = 'new', pickup_at = MAX(pickup_at, ?) WHERE id = ? AND status = 'awaiting_payment'")
+        .bind(at + settings.prep_minutes * 60, order.id),
+    ]);
+  } else if (payment.state === 'cancelled' || payment.state === 'expired') {
+    await db.batch([
+      record,
+      db
+        .prepare("UPDATE orders SET status = 'cancelled', payment_status = 'failed' WHERE id = ? AND status = 'awaiting_payment'")
+        .bind(order.id),
+    ]);
+  } else {
+    await record.run();
+  }
+  return true;
+}
+
+// Sentoo calls this when a transaction changes. The call carries only a transaction id,
+// never a status. We answer "success" unless we need Sentoo to try again later.
+async function sentooWebhook(request, env) {
+  const ok = () => json({ success: true });
+  const transactionId = webhookTransactionId(await request.text());
+  if (!transactionId) return ok(); // refund notices and anything else we do not use
+  const order = await env.DB.prepare('SELECT * FROM orders WHERE sentoo_transaction_id = ?').bind(transactionId).first();
+  if (!order) return ok();
+  if (['success', 'cancelled', 'expired'].includes(order.pay_state)) return ok();
+  try {
+    const looked = await syncPayment(env, order, 'webhook');
+    // Out of lookups for this hour: ask Sentoo to call again later.
+    if (!looked) return json({ success: false }, 503);
+    return ok();
+  } catch (err) {
+    console.error('Sentoo webhook could not confirm the status', err.message);
+    return json({ success: false }, 503);
+  }
 }
 
 async function loadOrders(db, where, binds) {
@@ -335,7 +467,15 @@ const customerView = (o) => ({
   pickup_type: o.pickup_type,
   pickup_at: o.pickup_at,
   total_cents: o.total_cents,
+  payment_method: o.payment_method,
   payment_status: o.payment_status,
+  // Payment progress as Sentoo reports it, for orders paid online.
+  pay_state: o.pay_state,
+  pay_attempt: o.pay_attempt,
+  pay_message: o.pay_message,
+  pay_checked_at: o.pay_checked_at,
+  // The same Sentoo link can be reused until the payment is final.
+  pay_url: o.status === 'awaiting_payment' && ['issued', ''].includes(o.pay_state) ? o.pay_url : null,
   created_at: o.created_at,
   items: o.items,
 });
@@ -471,15 +611,31 @@ async function handleApi(request, env, url) {
   // Public
   if (path === '/api/menu' && method === 'GET') {
     const [settings, menu] = await Promise.all([loadSettings(db), loadMenu(db)]);
-    return json({ info: publicInfo(settings), availability: availability(settings, Date.now()), menu });
+    return json({ info: publicInfo(settings, env), availability: availability(settings, Date.now()), menu });
   }
   if (path === '/api/orders' && method === 'POST') return createOrder(request, env);
   if ((match = path.match(/^\/api\/orders\/([0-9a-f-]{36})$/)) && method === 'GET') {
     const [order] = await loadOrders(db, 'id = ?', [match[1]]);
     if (!order) throw new HttpError(404, 'We could not find that order.');
     const settings = await loadSettings(db);
-    return json({ order: customerView(order), info: publicInfo(settings) });
+    return json({ order: customerView(order), info: publicInfo(settings, env) });
   }
+  // The order page asks us to confirm the payment with Sentoo. How often we really
+  // ask Sentoo is limited inside syncPayment, whatever the browser does.
+  if ((match = path.match(/^\/api\/orders\/([0-9a-f-]{36})\/payment\/check$/)) && method === 'POST') {
+    let [order] = await loadOrders(db, 'id = ?', [match[1]]);
+    if (!order) throw new HttpError(404, 'We could not find that order.');
+    try {
+      // "returned" means the customer has just come back from Sentoo's payment page.
+      const kind = url.searchParams.get('returned') === '1' ? 'return' : 'poll';
+      if (await syncPayment(env, order, kind)) [order] = await loadOrders(db, 'id = ?', [match[1]]);
+    } catch (err) {
+      console.error('Sentoo status check failed', err.message);
+    }
+    const settings = await loadSettings(db);
+    return json({ order: customerView(order), info: publicInfo(settings, env) });
+  }
+  if (path === '/api/sentoo/webhook' && method === 'POST') return sentooWebhook(request, env);
 
   // Staff sign in
   if (path === '/api/staff/login' && method === 'POST') return login(request, env);
@@ -496,11 +652,17 @@ async function handleApi(request, env, url) {
     const settings = await loadSettings(db);
     const clock = localClock(Date.now(), settings.timezone_offset_minutes);
     // Everything from today's service, plus anything still open from before.
-    const orders = await loadOrders(db, "service_day = ? OR status IN ('new','preparing','ready')", [clock.date]);
+    // Orders still waiting for an online payment are not the kitchen's business yet.
+    const orders = await loadOrders(
+      db,
+      "(service_day = ? OR status IN ('new','preparing','ready')) AND status != 'awaiting_payment'",
+      [clock.date]
+    );
     return json({
       orders,
       service_day: clock.date,
       ordering_paused: Boolean(settings.ordering_paused),
+      payment_test: sentooEnabled(env) && sentooMode(env) === 'sandbox',
       availability: availability(settings, Date.now()),
       server_time: now(),
     });

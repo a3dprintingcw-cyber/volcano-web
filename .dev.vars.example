@@ -6,3 +6,9 @@
 STAFF_PIN=choose-a-kitchen-pin
 ADMIN_PIN=choose-a-manager-pin
 SESSION_SECRET=a-long-random-string
+
+# Online payment through Sentoo (optional). Leave these out and the site offers pay at pickup only.
+# For local testing, run "node scripts/mock-sentoo.mjs" and use these values:
+SENTOO_MERCHANT_ID=test-merchant
+SENTOO_SECRET=test-secret
+SENTOO_API_URL=http://127.0.0.1:8799

@@ -357,7 +357,16 @@ function renderCart() {
           <textarea id="c-notes" name="notes" maxlength="300"></textarea>
         </div>
         ${alcohol ? `<label class="check"><input type="checkbox" name="age" required> I am 18 or older. I will show ID at pickup if asked.</label>` : ''}
-        <p class="pay-note">Pay when you pick up your order.</p>
+        ${
+          state.info.online_payment
+            ? `<fieldset class="group pay-choice">
+                <legend>Payment</legend>
+                <label class="choice"><input type="radio" name="payment" value="sentoo" checked> <span>Pay now online<br><small>With your bank or card, through Sentoo</small></span></label>
+                <label class="choice"><input type="radio" name="payment" value="pickup"> <span>Pay at pickup</span></label>
+              </fieldset>
+              ${state.info.payment_test ? '<p class="pay-note">Test mode: online payments are practice payments. No real money is charged.</p>' : ''}`
+            : '<p class="pay-note">Pay when you pick up your order.</p>'
+        }
         ${form.error ? `<p class="error" role="alert">${esc(form.error)}</p>` : ''}
       </form>`;
   }
@@ -371,9 +380,16 @@ function renderCart() {
     </div>
     ${
       avail.can_order
-        ? `<div class="sheet-foot"><button class="btn btn-primary" type="submit" form="checkout" ${form.sending ? 'disabled' : ''}>${form.sending ? 'Placing your order…' : `Place order, ${money(total)}`}</button></div>`
+        ? `<div class="sheet-foot"><button class="btn btn-primary" type="submit" form="checkout" ${form.sending ? 'disabled' : ''}>${form.sending ? 'Placing your order…' : submitLabel(total)}</button></div>`
         : ''
     }`;
+}
+
+// The button says what will happen next: straight to the kitchen, or on to payment first.
+function submitLabel(total) {
+  const chosen = cartDialog.querySelector('input[name="payment"]:checked');
+  const online = state.info.online_payment && (!chosen || chosen.value === 'sentoo');
+  return online ? `Continue to payment, ${money(total)}` : `Place order, ${money(total)}`;
 }
 
 function keepFormValues(render) {
@@ -382,13 +398,25 @@ function keepFormValues(render) {
   render();
   const fresh = cartDialog.querySelector('#checkout');
   if (!values || !fresh) return;
+  const relabel = () => {
+    const button = cartDialog.querySelector('.sheet-foot .btn');
+    if (button && !form.sending) button.textContent = submitLabel(cartSummary().total);
+  };
   for (const [name, value] of Object.entries(values)) {
     const field = fresh.elements[name];
     if (!field) continue;
     if (field.type === 'checkbox') field.checked = true;
+    else if (name === 'payment') field.value = value;
     else if (field.tagName !== 'SELECT' || [...field.options].some((o) => o.value === value)) field.value = value;
   }
+  relabel();
 }
+
+cartDialog.addEventListener('change', (event) => {
+  if (event.target.name !== 'payment' || form.sending) return;
+  const button = cartDialog.querySelector('.sheet-foot .btn');
+  if (button) button.textContent = submitLabel(cartSummary().total);
+});
 
 $('cartbar').addEventListener('click', () => {
   form.error = '';
@@ -451,13 +479,15 @@ cartDialog.addEventListener('submit', async (event) => {
         notes: String(data.get('notes') || ''),
         pickup: pickup === 'asap' ? 'asap' : Number(pickup),
         age_confirmed: Boolean(data.get('age')),
+        payment: data.get('payment') === 'sentoo' ? 'sentoo' : 'pickup',
         items: state.cart,
       },
     });
     store.set(LAST_ORDER_KEY, { id: order.id, number: order.number, at: Date.now() });
     state.cart = [];
     saveCart();
-    location.href = `/order?id=${order.id}`;
+    // Paying online: on to Sentoo's payment page. Sentoo sends the customer back to the order page.
+    location.href = order.pay_url || `/order?id=${order.id}`;
   } catch (err) {
     form.sending = false;
     // The menu or opening times may have changed under us: refresh and show why.

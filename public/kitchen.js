@@ -59,7 +59,11 @@ function card(order, column, serverTime) {
       ${order.notes ? `<p class="card-note">${esc(order.notes)}</p>` : ''}
       <div class="card-foot">
         <span class="card-total">${money(order.total_cents)}</span>
-        <button class="tag ${paid ? 'is-paid' : ''}" type="button" data-paid="${paid ? '0' : '1'}" aria-pressed="${paid}">${paid ? 'Paid' : 'Not paid'}</button>
+        ${
+          order.payment_method === 'sentoo' && paid
+            ? `<span class="tag is-paid">Paid online${state.data.payment_test ? ' (test)' : ''}</span>`
+            : `<button class="tag ${paid ? 'is-paid' : ''}" type="button" data-paid="${paid ? '0' : '1'}" aria-pressed="${paid}">${paid ? 'Paid' : 'Not paid'}</button>`
+        }
         <button class="btn btn-primary" type="button" data-status="${column.next}">${column.action}</button>
       </div>
       <div class="card-foot" style="padding-top:0">
@@ -101,7 +105,13 @@ function render() {
             ${finished
               .map(
                 (o) => `<tr data-id="${o.id}"><td>${o.number}</td><td>${esc(o.customer_name)}</td><td>${money(o.total_cents)}</td>
-                <td>${o.status === 'done' ? `Picked up${o.payment_status === 'paid' ? ', paid' : ', not marked paid'}` : 'Cancelled'}</td>
+                <td>${
+                  o.status === 'done'
+                    ? `Picked up${o.payment_status === 'paid' ? (o.payment_method === 'sentoo' ? ', paid online' : ', paid') : ', not marked paid'}`
+                    : o.payment_method === 'sentoo' && o.payment_status === 'paid'
+                      ? 'Cancelled. Paid online: refund it in the Sentoo portal'
+                      : 'Cancelled'
+                }</td>
                 <td><button class="link" type="button" data-status="ready">Put back on the board</button></td></tr>`
               )
               .join('')}</tbody></table>`
