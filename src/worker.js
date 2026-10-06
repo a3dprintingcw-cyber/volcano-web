@@ -91,10 +91,18 @@ async function loadSettings(db) {
 
 // ---------- menu ----------
 
-async function loadMenu(db) {
+// Where a dish's photo is served from. Photos shipped with the site are files;
+// photos uploaded on the admin page live in the database.
+const photoUrls = (image) => {
+  if (!image) return null;
+  if (image.startsWith('photo:')) return { small: `/api/photos/${image.slice(6)}/small`, large: `/api/photos/${image.slice(6)}/large` };
+  return { small: `/img/${image}-420.webp`, large: `/img/${image}-900.webp` };
+};
+
+async function loadMenu(db, { withArchived = false } = {}) {
   const [cats, items, groups, options] = await db.batch([
     db.prepare('SELECT * FROM categories ORDER BY sort'),
-    db.prepare('SELECT * FROM items ORDER BY category_id, sort'),
+    db.prepare(`SELECT * FROM items ${withArchived ? '' : 'WHERE archived = 0'} ORDER BY category_id, sort`),
     db.prepare('SELECT * FROM option_groups ORDER BY item_id, sort'),
     db.prepare('SELECT * FROM options ORDER BY group_id, sort'),
   ]);
@@ -141,8 +149,10 @@ async function loadMenu(db) {
       from_cents: from,
       has_price_range: itemGroups.some((g) => g.min > 0 && new Set(g.options.map((o) => o.price_cents)).size > 1),
       image: i.image,
+      photo: photoUrls(i.image),
       alcohol: !!i.alcohol,
       available: !!i.available,
+      archived: !!i.archived,
       groups: itemGroups,
     });
   }
@@ -153,6 +163,30 @@ async function loadMenu(db) {
     note: c.note,
     items: itemsByCat.get(c.id) || [],
   }));
+}
+
+// Best sellers of the last 30 days, for the "Popular" section.
+// Shown only once there are enough real orders for it to mean something.
+const POPULAR = { minOrders: 20, show: 6, days: 30 };
+async function popularItems(db, settings, menu) {
+  const clock = localClock(Date.now(), settings.timezone_offset_minutes);
+  const since = new Date(Date.parse(`${clock.date}T00:00:00Z`) - (POPULAR.days - 1) * 86_400_000).toISOString().slice(0, 10);
+  const counted = "o.status IN ('new','preparing','ready','done')";
+  const [orders, top] = await db.batch([
+    db.prepare(`SELECT COUNT(*) AS n FROM orders o WHERE ${counted} AND o.service_day >= ?`).bind(since),
+    db
+      .prepare(
+        `SELECT oi.item_id AS id, SUM(oi.quantity) AS quantity FROM order_items oi JOIN orders o ON o.id = oi.order_id
+         WHERE ${counted} AND o.service_day >= ? AND oi.item_id IS NOT NULL GROUP BY oi.item_id ORDER BY quantity DESC LIMIT 30`
+      )
+      .bind(since),
+  ]);
+  if (orders.results[0].n < POPULAR.minOrders) return [];
+  // Dishes only: drinks and sides sell the most everywhere and tell nobody anything.
+  const dishes = new Set(
+    menu.filter((c) => !['beverages', 'sides'].includes(c.slug)).flatMap((c) => c.items.filter((i) => i.available).map((i) => i.id))
+  );
+  return top.results.map((r) => r.id).filter((id) => dishes.has(id)).slice(0, POPULAR.show);
 }
 
 function publicInfo(settings, env) {
@@ -726,7 +760,24 @@ async function handleApi(request, env, url, ctx) {
   // Public
   if (path === '/api/menu' && method === 'GET') {
     const [settings, menu] = await Promise.all([loadSettings(db), loadMenu(db)]);
-    return json({ info: publicInfo(settings, env), availability: availability(settings, Date.now()), menu });
+    return json({
+      info: publicInfo(settings, env),
+      availability: availability(settings, Date.now()),
+      menu,
+      popular: await popularItems(db, settings, menu),
+    });
+  }
+  if ((match = path.match(/^\/api\/photos\/([0-9a-f-]{36})\/(small|large)$/)) && method === 'GET') {
+    const row = await db.prepare(`SELECT ${match[2]} AS data FROM photos WHERE id = ?`).bind(match[1]).first();
+    if (!row) throw new HttpError(404, 'Photo not found.');
+    return new Response(new Uint8Array(row.data), {
+      headers: {
+        'content-type': 'image/jpeg',
+        // A photo never changes under the same id, so it can be kept for a long time.
+        'cache-control': 'public, max-age=31536000, immutable',
+        'x-content-type-options': 'nosniff',
+      },
+    });
   }
   if (path === '/api/orders' && method === 'POST') return createOrder(request, env);
   if ((match = path.match(/^\/api\/orders\/([0-9a-f-]{36})$/)) && method === 'GET') {
@@ -866,7 +917,7 @@ async function handleApi(request, env, url, ctx) {
   }
   if (path === '/api/staff/menu' && method === 'GET') {
     const role = await requireRole(request, env, 'staff');
-    const [settings, menu] = await Promise.all([loadSettings(db), loadMenu(db)]);
+    const [settings, menu] = await Promise.all([loadSettings(db), loadMenu(db, { withArchived: true })]);
     return json({ role, menu, settings });
   }
 
@@ -881,8 +932,55 @@ async function handleApi(request, env, url, ctx) {
       if (!changes.name) throw new HttpError(400, 'The name cannot be empty.');
     }
     if ('description' in body) changes.description = cleanText(body.description, 200);
+    if ('archived' in body) changes.archived = body.archived ? 1 : 0;
+    if (body.image === '') changes.image = '';
     await updateRow(db, 'items', Number(match[1]), changes);
     return json({ ok: true });
+  }
+  if (path === '/api/admin/items' && method === 'POST') {
+    await requireRole(request, env, 'admin');
+    const body = await readJson(request);
+    const name = cleanText(body.name, 60);
+    if (!name) throw new HttpError(400, 'Give the dish a name.');
+    const category = await db.prepare('SELECT id FROM categories WHERE id = ?').bind(Number(body.category_id)).first();
+    if (!category) throw new HttpError(400, 'Choose a menu section for the dish.');
+    const price = priceField(body.price_cents);
+    if (price < 100) throw new HttpError(400, 'Enter a price of at least 1 guilder.');
+    const last = await db.prepare('SELECT COALESCE(MAX(sort), -1) + 1 AS n FROM items WHERE category_id = ?').bind(category.id).first();
+    const result = await db
+      .prepare('INSERT INTO items (category_id, name, description, price_cents, image, alcohol, available, sort) VALUES (?, ?, ?, ?, ?, ?, 1, ?)')
+      .bind(category.id, name, cleanText(body.description, 200), price, '', body.alcohol ? 1 : 0, last.n)
+      .run();
+    return json({ ok: true, id: result.meta.last_row_id }, 201);
+  }
+  // A photo arrives already resized by the admin page, as two JPEGs in base64.
+  if ((match = path.match(/^\/api\/admin\/items\/(\d+)\/photo$/)) && method === 'POST') {
+    await requireRole(request, env, 'admin');
+    const item = await db.prepare('SELECT id, image FROM items WHERE id = ?').bind(Number(match[1])).first();
+    if (!item) throw new HttpError(404, 'Not found.');
+    const body = await readJson(request);
+    const decode = (value, maxBytes) => {
+      let bytes;
+      try {
+        bytes = Uint8Array.from(atob(String(value || '')), (c) => c.charCodeAt(0));
+      } catch {
+        throw new HttpError(400, 'The photo could not be read. Please try another one.');
+      }
+      const isJpeg = bytes.length > 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+      if (!isJpeg) throw new HttpError(400, 'The photo could not be read. Please try another one.');
+      if (bytes.length > maxBytes) throw new HttpError(400, 'That photo is too large. Please try another one.');
+      return bytes;
+    };
+    const small = decode(body.small, 200_000);
+    const large = decode(body.large, 700_000);
+    const id = crypto.randomUUID();
+    await db.batch([
+      db.prepare('INSERT INTO photos (id, small, large, created_at) VALUES (?, ?, ?, ?)').bind(id, small, large, now()),
+      db.prepare('UPDATE items SET image = ? WHERE id = ?').bind(`photo:${id}`, item.id),
+      // The photo this one replaces is no longer shown anywhere.
+      db.prepare('DELETE FROM photos WHERE id = ?').bind(item.image.startsWith('photo:') ? item.image.slice(6) : ''),
+    ]);
+    return json({ ok: true, photo: photoUrls(`photo:${id}`) });
   }
   if ((match = path.match(/^\/api\/admin\/options\/(\d+)$/)) && method === 'PATCH') {
     await requireRole(request, env, 'admin');

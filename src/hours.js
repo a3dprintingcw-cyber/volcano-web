@@ -49,6 +49,11 @@ export function availability(settings, nowMs) {
     today: today ? { open: today.open, close: today.close } : null,
   };
 
+  // "notice" carries the same information as "message" in a form the website can
+  // put into another language: a key plus the numbers it needs.
+  const next = nextOpening(settings.hours, clock.weekday);
+  const nextInfo = next ? { days_ahead: next.daysAhead, day: next.day, open: next.open } : null;
+
   const closedUntilNext = () => {
     const next = nextOpening(settings.hours, clock.weekday);
     if (!next) return 'Online ordering is closed.';
@@ -57,18 +62,27 @@ export function availability(settings, nowMs) {
   };
 
   if (settings.ordering_paused) {
-    return { ...base, message: settings.paused_message || 'Online ordering is paused right now. Please check back soon.' };
+    return {
+      ...base,
+      message: settings.paused_message || 'Online ordering is paused right now. Please check back soon.',
+      notice: settings.paused_message ? { key: 'custom', text: settings.paused_message } : { key: 'paused' },
+    };
   }
   if (!today) {
-    return { ...base, message: `Closed today. ${closedUntilNext()}` };
+    return { ...base, message: `Closed today. ${closedUntilNext()}`, notice: { key: 'closed_today', next: nextInfo } };
   }
 
   const lastOrder = today.close - settings.last_order_minutes_before_close;
   if (clock.minutes >= today.close) {
-    return { ...base, message: `Closed for tonight. ${closedUntilNext()}` };
+    return { ...base, message: `Closed for tonight. ${closedUntilNext()}`, notice: { key: 'closed_tonight', next: nextInfo } };
   }
   if (clock.minutes > lastOrder) {
-    return { ...base, open_now: true, message: `The kitchen is closing, so we have stopped taking online orders. ${closedUntilNext()}` };
+    return {
+      ...base,
+      open_now: true,
+      message: `The kitchen is closing, so we have stopped taking online orders. ${closedUntilNext()}`,
+      notice: { key: 'closing', next: nextInfo },
+    };
   }
 
   const openNow = clock.minutes >= today.open;
@@ -88,6 +102,7 @@ export function availability(settings, nowMs) {
     message: openNow
       ? `Open until ${formatMinutes(today.close)}`
       : `Opens at ${formatMinutes(today.open)}. Order now and pick up tonight.`,
+    notice: openNow ? { key: 'open_until', close: today.close } : { key: 'opens_at', open: today.open },
   };
 }
 
