@@ -97,7 +97,8 @@ test('sides and beverages', () => {
   assert.equal(price('Crispy Corn', [['Size', 'Regular']]), 7);
   assert.equal(price('Crispy Corn', [['Size', 'Large']]), 12);
   assert.equal(price('Water'), 4);
-  assert.equal(price('Arizona'), 4);
+  assert.equal(price('Arizona', [['Flavor', 'Watermelon']]), 4);
+  assert.equal(price('Soda', [['Choice', 'Sprite']]), 5);
   assert.equal(price('Soda', [['Choice', 'Fria']]), 5);
   assert.equal(price('Fresh Juice', [['Flavor', 'Passion fruit']]), 6);
   assert.equal(price('Beer & Smirnoff', [['Choice', 'Heineken']]), 7);

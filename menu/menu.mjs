@@ -199,8 +199,8 @@ export const menu = [
     name: 'Beverages',
     items: [
       { name: 'Water', price: 4 },
-      { name: 'Arizona', price: 4 },
-      { name: 'Soda', price: 5, groups: [one('Choice', ['Cola', 'Fria'])] },
+      { name: 'Arizona', price: 4, groups: [one('Flavor', ['Watermelon', 'Punch', 'Lemon'])] },
+      { name: 'Soda', price: 5, groups: [one('Choice', ['Cola', 'Fria', 'Sprite', 'Royal Club Ginger Ale'])] },
       { name: 'Fresh Juice', price: 6, groups: [one('Flavor', ['Lemon', 'Punch', 'Kiwi punch', 'Passion fruit'])] },
       { name: 'Beer & Smirnoff', price: 7, alcohol: true, groups: [one('Choice', ['Amstel Bright', 'Heineken', 'Smirnoff'])] },
       { name: 'Cocktail', price: 18, alcohol: true, image: 'cocktail', groups: [one('Choice', ['El Volcanico', 'Eruption', 'Explosion'])] },
