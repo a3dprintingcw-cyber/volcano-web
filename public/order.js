@@ -14,6 +14,52 @@ let confirmingCancel = false;
 let cancelError = '';
 let latest = null;
 
+// ---------- phone notification when the order is ready ----------
+// 'unsupported' (this browser cannot), 'off', 'on', 'blocked' (the customer said no), 'working'
+const canNotify = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+let notifyState = !canNotify ? 'unsupported' : Notification.permission === 'denied' ? 'blocked' : 'off';
+// On an iPhone, notifications only work once the site is on the home screen.
+const isIphoneTab = /iPhone|iPad|iPod/.test(navigator.userAgent) && !canNotify;
+
+const keyBytes = (base64url) => Uint8Array.from(atob(base64url.replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0));
+
+async function switchOnNotifications({ ask }) {
+  if (!canNotify) return;
+  try {
+    if (Notification.permission === 'default') {
+      if (!ask) return; // the browser only allows asking after a tap
+      notifyState = 'working';
+      if (latest) render(latest);
+      if ((await Notification.requestPermission()) !== 'granted') {
+        notifyState = Notification.permission === 'denied' ? 'blocked' : 'off';
+        if (latest) render(latest);
+        return;
+      }
+    }
+    if (Notification.permission !== 'granted') return;
+    const registration = await navigator.serviceWorker.register('/sw.js');
+    await navigator.serviceWorker.ready;
+    const { key } = await api('/api/push/key');
+    const subscription =
+      (await registration.pushManager.getSubscription()) ||
+      (await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(key) }));
+    await api(`/api/orders/${encodeURIComponent(id)}/push`, { method: 'POST', body: { endpoint: subscription.endpoint } });
+    notifyState = 'on';
+  } catch {
+    notifyState = 'off';
+  }
+  if (latest) render(latest);
+}
+
+function notifyBlock(active) {
+  if (!active) return '';
+  if (notifyState === 'on') return '<p class="notify is-on">We will send a notification to this phone when your food is ready.</p>';
+  if (notifyState === 'working') return '<p class="notify">Switching on notifications…</p>';
+  if (notifyState === 'blocked') return '<p class="notify">Notifications are blocked for this site. Keep this page open and it will chime when your food is ready.</p>';
+  if (notifyState === 'off') return '<button class="btn btn-primary" type="button" id="notify-me">Notify me when it is ready</button>';
+  return `<p class="notify">Keep this page open and it will chime when your food is ready.${isIphoneTab ? ' To get a notification instead, add this site to your home screen first.' : ''}</p>`;
+}
+
 // Tell the customer the food is ready, even if the phone is in their pocket.
 function announceReady(order) {
   try {
@@ -139,6 +185,7 @@ function render({ order, info }) {
       </div>
       <h1 class="ticket-status">${title}</h1>
       <p class="ticket-detail">${esc(detail)}</p>
+      ${awaiting ? '' : `<div class="ticket-notify">${notifyBlock(active && order.status !== 'ready')}</div>`}
       ${active ? `<p class="ticket-where">Pickup at <a href="${esc(PLACE.mapUrl)}" rel="noopener">${esc(PLACE.address)}</a></p>` : ''}
       ${
         order.status === 'cancelled' || awaiting
@@ -204,6 +251,7 @@ async function refresh() {
 
 // Cancelling takes two taps, so a slip of the thumb does not cancel dinner.
 ticket.addEventListener('click', async (event) => {
+  if (event.target.closest('#notify-me')) return switchOnNotifications({ ask: true });
   if (!event.target.closest('#cancel-order') || !latest) return;
   if (!confirmingCancel) {
     confirmingCancel = true;
@@ -228,7 +276,8 @@ ticket.addEventListener('click', async (event) => {
 });
 
 if (/^[0-9a-f-]{36}$/.test(id)) {
-  refresh();
+  // A customer who allowed notifications before does not need to tap again.
+  refresh().then(() => switchOnNotifications({ ask: false }));
   timer = setInterval(refresh, 10_000);
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden) refresh();

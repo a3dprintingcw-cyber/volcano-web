@@ -3,6 +3,7 @@
 // Data lives in a D1 database bound as DB.
 
 import { availability, describeHours, localClock } from './hours.js';
+import { notificationFor, notifyOrder, validEndpoint, vapidKeys } from './push.js';
 import {
   PAYMENT_MINUTES,
   SentooError,
@@ -716,7 +717,7 @@ function validateSettings(input, current) {
 
 // ---------- routing ----------
 
-async function handleApi(request, env, url) {
+async function handleApi(request, env, url, ctx) {
   const db = env.DB;
   const path = url.pathname.replace(/\/+$/, '');
   const method = request.method;
@@ -750,6 +751,39 @@ async function handleApi(request, env, url) {
     return json({ order: customerView(order), info: publicInfo(settings, env) });
   }
   if (path === '/api/sentoo/webhook' && method === 'POST') return sentooWebhook(request, env);
+
+  // Phone notifications. See src/push.js for how the pieces fit.
+  if (path === '/api/push/key' && method === 'GET') {
+    return json({ key: (await vapidKeys(db)).publicKey });
+  }
+  if ((match = path.match(/^\/api\/orders\/([0-9a-f-]{36})\/push$/)) && method === 'POST') {
+    const body = await readJson(request);
+    if (!validEndpoint(env, body.endpoint)) throw new HttpError(400, 'Notifications could not be switched on for this browser.');
+    const order = await db.prepare('SELECT id, status FROM orders WHERE id = ?').bind(match[1]).first();
+    if (!order) throw new HttpError(404, 'We could not find that order.');
+    const count = await db.prepare('SELECT COUNT(*) AS n FROM push_subscriptions WHERE order_id = ?').bind(order.id).first();
+    if (count.n < 5) {
+      await db
+        .prepare('INSERT OR IGNORE INTO push_subscriptions (order_id, endpoint, created_at) VALUES (?, ?, ?)')
+        .bind(order.id, String(body.endpoint), now())
+        .run();
+    }
+    return json({ ok: true });
+  }
+  // The phone asks what to show. It identifies itself by its own push address.
+  if (path === '/api/push/message' && method === 'POST') {
+    const body = await readJson(request);
+    const order = await db
+      .prepare(
+        `SELECT o.id, o.number, o.status FROM push_subscriptions p JOIN orders o ON o.id = p.order_id
+         WHERE p.endpoint = ? AND o.status IN ('ready', 'cancelled') ORDER BY o.updated_at DESC LIMIT 1`
+      )
+      .bind(String(body.endpoint || ''))
+      .first();
+    if (!order) return json({ title: 'Volcano Street Food', body: 'There is news about your order.', url: '/' });
+    const settings = await loadSettings(db);
+    return json({ ...notificationFor(order, settings.phone), url: `/order?id=${order.id}`, tag: `order-${order.id}` });
+  }
   if ((match = path.match(/^\/api\/orders\/([0-9a-f-]{36})\/cancel$/)) && method === 'POST') {
     await customerCancel(env, match[1]);
     const [order] = await loadOrders(db, 'id = ?', [match[1]]);
@@ -799,6 +833,8 @@ async function handleApi(request, env, url) {
     }
     if ('paid' in body) changes.payment_status = body.paid ? 'paid' : 'unpaid';
     await updateRow(db, 'orders', match[1], changes);
+    // Tell the customer's phone. This runs after the kitchen's tap has been answered.
+    if (changes.status === 'ready' || changes.status === 'cancelled') ctx.waitUntil(notifyOrder(env, match[1]));
     return json({ ok: true });
   }
   // The kitchen sets how long orders take right now, so customers get an honest pickup time.
@@ -880,11 +916,11 @@ async function handleApi(request, env, url) {
 }
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url);
     if (!url.pathname.startsWith('/api/')) return env.ASSETS.fetch(request);
     try {
-      return await handleApi(request, env, url);
+      return await handleApi(request, env, url, ctx);
     } catch (err) {
       if (err instanceof HttpError) return json({ error: err.message }, err.status);
       console.error(err);

@@ -15,7 +15,7 @@ Everything runs on Cloudflare: one Worker serves the website and the API, and a 
 
 ```
 public/      the website (plain HTML, CSS and JavaScript, no build step)
-src/         the backend: worker.js (API), hours.js (opening hours and pickup slots), sentoo.js (online payment)
+src/         the backend: worker.js (API), hours.js (opening hours and pickup slots), sentoo.js (online payment), push.js (phone notifications)
 migrations/  database setup, applied once and in order: tables, then the menu
 db/          seed.sql, the menu as SQL (generated from menu/menu.mjs)
 menu/        menu.mjs: the menu as transcribed from the printed menu
@@ -29,6 +29,7 @@ Customers:
 - Browse the menu one section at a time, add dishes with their choices, and check out for pickup.
 - See the current wait time, which the kitchen sets.
 - Follow the order live. The page chimes, vibrates and changes its title when the food is ready.
+- Get a notification on their phone when the food is ready, even with the site closed (one tap on the order page to allow it). On iPhone this needs the site on the home screen first.
 - Cancel their own order until the kitchen starts cooking (two taps). Orders already paid online have to be cancelled by phone, because of the refund.
 - "Order the same again" with one tap on their next visit.
 - Add the site to their phone's home screen, where it opens like an app.
@@ -36,7 +37,7 @@ Customers:
 Kitchen (staff PIN):
 - Live board with New, Cooking and Ready for pickup. The browser tab shows how many new orders are waiting.
 - Wait time control (plus and minus 5 minutes) for busy moments.
-- WhatsApp the customer with the message already written, print a ticket, mark paid, cancel, pause online orders.
+- Print a ticket, mark paid, cancel, pause online orders. Marking an order ready notifies the customer by itself.
 
 Owner (manager PIN):
 - Sales today, the last 7 days and best sellers of the last 30 days.

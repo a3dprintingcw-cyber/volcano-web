@@ -18,6 +18,11 @@
 .ticket-actions { display: grid; gap: 0.7rem; margin-top: 1.2rem; }
 .ticket-actions .btn { width: 100%; }
 .ticket-actions .error { margin: 0; }
+.ticket-notify { padding: 0 1.2rem; }
+.ticket-notify:empty { display: none; }
+.ticket-notify .btn { width: 100%; margin-bottom: 1rem; background: var(--lava); color: var(--ash); box-shadow: 0 4px 0 var(--lava-deep); }
+.notify { margin: 0 0 1rem; text-align: center; color: #6b5947; font-size: 0.95rem; }
+.notify.is-on { color: #2f6b3a; font-weight: 700; }
 .btn-cancel { border-color: var(--ember); color: var(--smoke); }
 .ticket-cancelled .ticket-head { background: #d9c5a3; }
 @media (prefers-reduced-motion: reduce) { .steps li.is-now::before { animation: none; } }

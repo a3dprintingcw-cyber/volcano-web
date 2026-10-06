@@ -30,19 +30,6 @@ function beep() {
   }
 }
 
-// A WhatsApp link to the customer, with the message already written.
-// Local numbers are often typed without the country code, so 599 9 is added when missing.
-function whatsappLink(order) {
-  let digits = String(order.phone).replace(/\D/g, '');
-  if (digits.length === 7) digits = `5999${digits}`;
-  else if (digits.length === 8 && digits.startsWith('9')) digits = `599${digits}`;
-  const text =
-    order.status === 'ready'
-      ? `Hi ${order.customer_name}, your Volcano Street Food order ${order.number} is ready for pickup.`
-      : `Hi ${order.customer_name}, this is Volcano Street Food about your order ${order.number}. `;
-  return `https://wa.me/${digits}?text=${encodeURIComponent(text)}`;
-}
-
 function pickupLabel(order, serverTime) {
   const minutes = Math.round((order.pickup_at - serverTime) / 60);
   const rel = minutes >= 0 ? `in ${minutes} min` : `${-minutes} min late`;
@@ -80,7 +67,6 @@ function card(order, column, serverTime) {
         <button class="btn btn-primary" type="button" data-status="${column.next}">${column.action}</button>
       </div>
       <div class="card-foot card-foot-links">
-        <a class="link" href="${esc(whatsappLink(order))}" target="_blank" rel="noopener">WhatsApp</a>
         <button class="link" type="button" data-print>Print</button>
         ${column.back ? `<button class="link" type="button" data-status="${column.back}">Move back</button>` : ''}
         <button class="link link-end" type="button" data-cancel>${confirming ? 'Tap again to cancel this order' : 'Cancel order'}</button>
