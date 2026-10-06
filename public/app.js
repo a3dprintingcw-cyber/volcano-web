@@ -290,6 +290,19 @@ function addToCart(line) {
   else state.cart.push(line);
   saveCart();
   renderCartBar(true);
+  showAdded(line);
+}
+
+// Says out loud what just happened, so nobody wonders whether the tap worked.
+let toastTimer = null;
+function showAdded(line) {
+  const toast = $('toast');
+  toast.textContent = `Added: ${line.quantity} × ${state.items.get(line.item_id).name}`;
+  toast.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => {
+    toast.hidden = true;
+  }, 2600);
 }
 
 function lineDetails(line) {
