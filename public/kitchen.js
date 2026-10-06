@@ -106,14 +106,15 @@ function render() {
         </section>`;
       }).join('')}
     </div>
+    ${/* No amounts here on purpose: sales figures are for the manager page only. */ ''}
     <details class="done" ${state.doneOpen ? 'open' : ''}>
-      <summary>Finished today: ${taken.length} picked up, ${money(taken.reduce((sum, o) => sum + o.total_cents, 0))}${finished.length - taken.length ? `, ${finished.length - taken.length} cancelled` : ''}</summary>
+      <summary>Finished today: ${taken.length} picked up${finished.length - taken.length ? `, ${finished.length - taken.length} cancelled` : ''}</summary>
       ${
         finished.length
-          ? `<table><thead><tr><th>Order</th><th>Name</th><th>Total</th><th>Status</th><th></th></tr></thead><tbody>
+          ? `<table><thead><tr><th>Order</th><th>Name</th><th>Status</th><th></th></tr></thead><tbody>
             ${finished
               .map(
-                (o) => `<tr data-id="${o.id}"><td>${o.number}</td><td>${esc(o.customer_name)}</td><td>${money(o.total_cents)}</td>
+                (o) => `<tr data-id="${o.id}"><td>${o.number}</td><td>${esc(o.customer_name)}</td>
                 <td>${
                   o.status === 'done'
                     ? `Picked up${o.payment_status === 'paid' ? (o.payment_method === 'sentoo' ? ', paid online' : ', paid') : ', not marked paid'}`
