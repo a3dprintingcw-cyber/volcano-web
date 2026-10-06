@@ -1,5 +1,8 @@
 // Customer ordering site: menu, item choices, cart and checkout.
 import { api, esc, money, store } from '/shared.js';
+import { hoursText, noticeText, t, translatePage } from '/i18n.js';
+
+translatePage();
 
 const CART_KEY = 'volcano_cart_v1';
 const CUSTOMER_KEY = 'volcano_customer_v1';
@@ -9,12 +12,20 @@ const LAST_CART_KEY = 'volcano_last_cart_v1';
 const $ = (id) => document.getElementById(id);
 const state = { menu: [], items: new Map(), info: null, availability: null, cart: store.get(CART_KEY, []), section: null };
 
+// The server sends the real sections. "Popular" is added in front when there are best sellers to show.
+function withPopular(menu, popular) {
+  const byId = new Map(menu.flatMap((c) => c.items).map((i) => [i.id, i]));
+  const items = (popular || []).map((id) => byId.get(id)).filter(Boolean);
+  if (items.length < 3) return menu;
+  return [{ slug: 'popular', name: t('menu.popular'), note: t('menu.popular_note'), items }, ...menu];
+}
+
 // ---------- loading ----------
 
 async function load() {
   try {
     const data = await api('/api/menu');
-    state.menu = data.menu;
+    state.menu = withPopular(data.menu, data.popular);
     state.info = data.info;
     state.availability = data.availability;
     state.items = new Map();
@@ -29,7 +40,7 @@ async function load() {
     saveCart();
     renderPage();
   } catch (err) {
-    $('menu').innerHTML = `<p class="loading">${esc(err.message)} <button class="link" id="retry" type="button">Try again</button></p>`;
+    $('menu').innerHTML = `<p class="loading">${esc(err.message)} <button class="link" id="retry" type="button">${t('menu.retry')}</button></p>`;
     $('retry').addEventListener('click', load);
   }
 }
@@ -38,12 +49,12 @@ function renderPage() {
   const { availability: avail, info } = state;
 
   const status = $('status');
-  status.textContent = avail.can_order ? avail.message : avail.open_now ? 'Online orders closed' : 'Closed now';
+  status.textContent = avail.can_order ? noticeText(avail) : avail.open_now ? t('status.orders_closed') : t('status.closed_now');
   status.classList.toggle('is-open', avail.can_order && avail.open_now);
 
   const notice = $('notice');
   notice.hidden = avail.can_order && avail.open_now;
-  notice.textContent = avail.message;
+  notice.textContent = noticeText(avail);
 
   const tel = `tel:${info.phone.replace(/[^\d+]/g, '')}`;
   for (const id of ['phone-link', 'foot-phone']) {
@@ -53,15 +64,15 @@ function renderPage() {
 
   const today = new Date().toLocaleDateString('en-US', { weekday: 'long', timeZone: 'America/Curacao' });
   $('hours').innerHTML = info.hours
-    .map((h) => `<dt class="${h.name === today ? 'is-today' : ''}">${h.name}</dt><dd class="${h.name === today ? 'is-today' : ''}">${h.text}</dd>`)
+    .map((h) => `<dt class="${h.name === today ? 'is-today' : ''}">${t(`day.${h.day}`)}</dt><dd class="${h.name === today ? 'is-today' : ''}">${hoursText(h)}</dd>`)
     .join('');
 
   const todayHours = info.hours.find((h) => h.name === today);
-  $('hero-hours').textContent = todayHours && todayHours.open != null ? `Today: ${todayHours.text}` : 'Closed today';
+  $('hero-hours').textContent = todayHours && todayHours.open != null ? t('hero.today', { hours: hoursText(todayHours) }) : t('hero.closed_today');
   // The kitchen sets the wait time, so this is what customers can really expect right now.
   const wait = $('hero-wait');
   wait.hidden = !(avail.can_order && avail.open_now);
-  wait.textContent = `Ready for pickup in about ${info.prep_minutes} minutes`;
+  wait.textContent = t('hero.wait', { n: info.prep_minutes });
 
   // The menu shows one section at a time. Which one is open is kept in the
   // address (#tacos), so a shared link or the back button lands on the same section.
@@ -129,17 +140,15 @@ window.addEventListener('popstate', () => {
 });
 
 function itemRow(item) {
-  const price = `${item.has_price_range ? '<small>from</small> ' : ''}${money(item.from_cents)}`;
-  const photo = item.image
-    ? `<img class="item-photo" src="/img/${item.image}-420.webp" alt="" loading="lazy" width="100" height="100">`
-    : '';
+  const price = `${item.has_price_range ? `<small>${t('menu.from')}</small> ` : ''}${money(item.from_cents)}`;
+  const photo = item.photo ? `<img class="item-photo" src="${esc(item.photo.small)}" alt="" loading="lazy" width="100" height="100">` : '';
   return `
     <li>
       <button class="item ${item.available ? '' : 'is-out'}" type="button" data-item="${item.id}" ${item.available ? '' : 'disabled'}>
         <span class="item-body">
           <span class="item-name">${esc(item.name)}</span>
           ${item.description ? `<span class="item-desc">${esc(item.description)}</span>` : ''}
-          <span class="item-price">${item.available ? price : '<span class="badge">Sold out</span>'}</span>
+          <span class="item-price">${item.available ? price : `<span class="badge">${t('menu.sold_out')}</span>`}</span>
         </span>
         <span class="item-side">${photo}<span class="item-add" aria-hidden="true">+</span></span>
       </button>
@@ -159,7 +168,7 @@ function openItem(id) {
   const groups = item.groups
     .map((g) => {
       const single = g.max === 1 && g.min === 1;
-      const rule = g.min === 0 ? 'Optional' : g.max > 1 ? `Choose ${g.max}` : 'Choose one';
+      const rule = g.min === 0 ? t('item.optional') : g.max > 1 ? t('item.choose_n', { n: g.max }) : t('item.choose_one');
       return `
         <fieldset class="group" data-group="${g.id}">
           <legend>${esc(g.name)} <span class="group-rule">${rule}</span></legend>
@@ -168,7 +177,7 @@ function openItem(id) {
               (o) => `
             <label class="choice ${o.available ? '' : 'is-out'}">
               <input type="${single ? 'radio' : 'checkbox'}" name="g${g.id}" value="${o.id}" ${o.available ? '' : 'disabled'}>
-              <span>${esc(o.name)}${o.available ? '' : ' (sold out)'}</span>
+              <span>${esc(o.name)}${o.available ? '' : ` ${t('menu.sold_out_short')}`}</span>
               ${choicePrice(item, g, o)}
             </label>`
             )
@@ -177,23 +186,23 @@ function openItem(id) {
     })
     .join('');
 
-  const close = '<button class="sheet-close" type="button" data-close aria-label="Close">×</button>';
+  const close = `<button class="sheet-close" type="button" data-close aria-label="${t('item.close')}">×</button>`;
   itemDialog.innerHTML = `
     <div class="sheet-scroll">
-      ${item.image ? `<div class="sheet-photo-wrap"><img class="sheet-photo" src="/img/${item.image}-900.webp" alt="${esc(item.name)}">${close}</div>` : ''}
-      <div class="sheet-head"><h2 id="item-title">${esc(item.name)}</h2>${item.image ? '' : close}</div>
+      ${item.photo ? `<div class="sheet-photo-wrap"><img class="sheet-photo" src="${esc(item.photo.large)}" alt="${esc(item.name)}">${close}</div>` : ''}
+      <div class="sheet-head"><h2 id="item-title">${esc(item.name)}</h2>${item.photo ? '' : close}</div>
       ${item.description ? `<p class="sheet-desc">${esc(item.description)}</p>` : ''}
       ${groups}
       <div class="field">
-        <label for="item-note">Anything we should know? <span class="hint">Optional</span></label>
-        <input id="item-note" maxlength="120" placeholder="No onions, sauce on the side…" autocomplete="off">
+        <label for="item-note">${t('item.note')} <span class="hint">${t('item.optional')}</span></label>
+        <input id="item-note" maxlength="120" placeholder="${t('item.note_example')}" autocomplete="off">
       </div>
     </div>
     <div class="sheet-foot">
-      <div class="qty" role="group" aria-label="Quantity">
-        <button type="button" data-qty="-1" aria-label="One less">−</button>
+      <div class="qty" role="group" aria-label="${t('item.quantity')}">
+        <button type="button" data-qty="-1" aria-label="${t('item.less')}">−</button>
         <output id="item-qty" aria-live="polite">1</output>
-        <button type="button" data-qty="1" aria-label="One more">+</button>
+        <button type="button" data-qty="1" aria-label="${t('item.more')}">+</button>
       </div>
       <button class="btn btn-primary" type="button" id="item-add"></button>
     </div>`;
@@ -217,7 +226,7 @@ function draftStatus() {
     const picked = g.options.filter((o) => chosen.has(o.id));
     unit += picked.reduce((sum, o) => sum + o.price_cents, 0);
     if (picked.length < g.min && !missing) {
-      missing = g.max > 1 ? `Choose ${g.min - picked.length} more` : `Choose ${g.name.toLowerCase()}`;
+      missing = g.max > 1 ? t('item.missing_more', { n: g.min - picked.length }) : t('item.missing', { name: g.name.toLowerCase() });
     }
   }
   return { unit, missing };
@@ -230,7 +239,7 @@ function updateDraft() {
   itemDialog.querySelector('[data-qty="1"]').disabled = draft.quantity >= 20;
   const button = $('item-add');
   button.disabled = Boolean(missing);
-  button.textContent = missing || `Add to order, ${money(unit * draft.quantity)}`;
+  button.textContent = missing || t('item.add', { price: money(unit * draft.quantity) });
   // Grey out the remaining boxes once a "choose N" group is full.
   for (const g of draft.item.groups) {
     if (g.max <= 1 && g.min === 1) continue;
@@ -297,7 +306,7 @@ function addToCart(line) {
 let toastTimer = null;
 function showAdded(line) {
   const toast = $('toast');
-  toast.textContent = `Added: ${line.quantity} × ${state.items.get(line.item_id).name}`;
+  toast.textContent = t('cart.added', { item: `${line.quantity} × ${state.items.get(line.item_id).name}` });
   toast.hidden = false;
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => {
@@ -332,7 +341,7 @@ function renderCartBar(bump = false) {
   bar.hidden = count === 0;
   $('cartbar-count').textContent = count;
   $('cartbar-total').textContent = money(total);
-  bar.setAttribute('aria-label', `View your order: ${count} ${count === 1 ? 'item' : 'items'}, ${money(total)}`);
+  bar.setAttribute('aria-label', `${t('cart.view')}: ${count}, ${money(total)}`);
   if (bump) {
     bar.classList.remove('bump');
     void bar.offsetWidth;
@@ -347,29 +356,29 @@ function renderCart() {
   const { count, total, alcohol } = cartSummary();
   const avail = state.availability;
   const customer = store.get(CUSTOMER_KEY, {});
-  const head = `<div class="sheet-head"><h2 id="cart-title">Your order</h2><button class="sheet-close" type="button" data-close aria-label="Close">×</button></div>`;
+  const head = `<div class="sheet-head"><h2 id="cart-title">${t('cart.title')}</h2><button class="sheet-close" type="button" data-close aria-label="${t('item.close')}">×</button></div>`;
 
   if (count === 0) {
-    cartDialog.innerHTML = `${head}<p class="empty">Your order is empty. Pick something from the menu to get started.</p>`;
+    cartDialog.innerHTML = `${head}<p class="empty">${t('cart.empty')}</p>`;
     return;
   }
 
   const lines = state.cart
     .map((line, index) => {
       const d = lineDetails(line);
-      const details = [...d.options.map((o) => o.name), line.note && `Note: ${line.note}`].filter(Boolean).join(', ');
+      const details = [...d.options.map((o) => o.name), line.note && t('cart.note', { note: line.note })].filter(Boolean).join(', ');
       return `
         <li class="line">
           <span class="line-name">${esc(d.item.name)}</span>
           <span class="line-price">${money(d.unit * line.quantity)}</span>
           ${details ? `<span class="line-opts">${esc(details)}</span>` : ''}
           <span class="line-actions">
-            <span class="qty small" role="group" aria-label="Quantity of ${esc(d.item.name)}">
-              <button type="button" data-line="${index}" data-step="-1" aria-label="One less">−</button>
+            <span class="qty small" role="group" aria-label="${t('item.quantity')}: ${esc(d.item.name)}">
+              <button type="button" data-line="${index}" data-step="-1" aria-label="${t('item.less')}">−</button>
               <output>${line.quantity}</output>
-              <button type="button" data-line="${index}" data-step="1" aria-label="One more" ${line.quantity >= 20 ? 'disabled' : ''}>+</button>
+              <button type="button" data-line="${index}" data-step="1" aria-label="${t('item.more')}" ${line.quantity >= 20 ? 'disabled' : ''}>+</button>
             </span>
-            <button class="link" type="button" data-line="${index}" data-remove>Remove</button>
+            <button class="link" type="button" data-line="${index}" data-remove>${t('cart.remove')}</button>
           </span>
         </li>`;
     })
@@ -377,41 +386,41 @@ function renderCart() {
 
   let checkout;
   if (!avail.can_order) {
-    checkout = `<p class="error">${esc(avail.message)}</p><p class="empty">Your order is saved on this device for when we are open.</p>`;
+    checkout = `<p class="error">${esc(noticeText(avail))}</p><p class="empty">${t('cart.saved')}</p>`;
   } else {
     const times = [
-      avail.asap ? `<option value="asap">As soon as possible, about ${avail.asap.minutes} minutes</option>` : '',
+      avail.asap ? `<option value="asap">${t('cart.asap', { n: avail.asap.minutes })}</option>` : '',
       ...avail.slots.map((s) => `<option value="${s.at}">${s.label}</option>`),
     ].join('');
     checkout = `
       <form class="checkout" id="checkout" novalidate>
-        <h3>Pickup details</h3>
+        <h3>${t('cart.details')}</h3>
         <div class="field">
-          <label for="c-time">Pickup time</label>
+          <label for="c-time">${t('cart.time')}</label>
           <select id="c-time" name="pickup" required>${times}</select>
         </div>
         <div class="field">
-          <label for="c-name">Your name</label>
+          <label for="c-name">${t('cart.name')}</label>
           <input id="c-name" name="name" required maxlength="60" autocomplete="name" value="${esc(customer.name || '')}">
         </div>
         <div class="field">
-          <label for="c-phone">Phone number <span class="hint">So we can reach you about your order</span></label>
+          <label for="c-phone">${t('cart.phone')} <span class="hint">${t('cart.phone_hint')}</span></label>
           <input id="c-phone" name="phone" type="tel" required maxlength="20" autocomplete="tel" inputmode="tel" value="${esc(customer.phone || '')}">
         </div>
         <div class="field">
-          <label for="c-notes">Note for the kitchen <span class="hint">Optional</span></label>
+          <label for="c-notes">${t('cart.kitchen_note')} <span class="hint">${t('item.optional')}</span></label>
           <textarea id="c-notes" name="notes" maxlength="300"></textarea>
         </div>
-        ${alcohol ? `<label class="check"><input type="checkbox" name="age" required> I am 18 or older. I will show ID at pickup if asked.</label>` : ''}
+        ${alcohol ? `<label class="check"><input type="checkbox" name="age" required> ${t('cart.age')}</label>` : ''}
         ${
           state.info.online_payment
             ? `<fieldset class="group pay-choice">
-                <legend>Payment</legend>
-                <label class="choice"><input type="radio" name="payment" value="sentoo" checked> <span>Pay now online<br><small>With your bank or card, through Sentoo</small></span></label>
-                <label class="choice"><input type="radio" name="payment" value="pickup"> <span>Pay at pickup</span></label>
+                <legend>${t('cart.payment')}</legend>
+                <label class="choice"><input type="radio" name="payment" value="sentoo" checked> <span>${t('cart.pay_online')}<br><small>${t('cart.pay_online_hint')}</small></span></label>
+                <label class="choice"><input type="radio" name="payment" value="pickup"> <span>${t('cart.pay_pickup')}</span></label>
               </fieldset>
-              ${state.info.payment_test ? '<p class="pay-note">Test mode: online payments are practice payments. No real money is charged.</p>' : ''}`
-            : '<p class="pay-note">Pay when you pick up your order.</p>'
+              ${state.info.payment_test ? `<p class="pay-note">${t('cart.pay_test')}</p>` : ''}`
+            : `<p class="pay-note">${t('cart.pay_note')}</p>`
         }
         ${form.error ? `<p class="error" role="alert">${esc(form.error)}</p>` : ''}
       </form>`;
@@ -421,12 +430,12 @@ function renderCart() {
     <div class="sheet-scroll">
       ${head}
       <ul class="lines">${lines}</ul>
-      <div class="total"><span>Total</span><span>${money(total)}</span></div>
+      <div class="total"><span>${t('cart.total')}</span><span>${money(total)}</span></div>
       ${checkout}
     </div>
     ${
       avail.can_order
-        ? `<div class="sheet-foot"><button class="btn btn-primary" type="submit" form="checkout" ${form.sending ? 'disabled' : ''}>${form.sending ? 'Placing your order…' : submitLabel(total)}</button></div>`
+        ? `<div class="sheet-foot"><button class="btn btn-primary" type="submit" form="checkout" ${form.sending ? 'disabled' : ''}>${form.sending ? t('cart.placing') : submitLabel(total)}</button></div>`
         : ''
     }`;
 }
@@ -435,7 +444,7 @@ function renderCart() {
 function submitLabel(total) {
   const chosen = cartDialog.querySelector('input[name="payment"]:checked');
   const online = state.info.online_payment && (!chosen || chosen.value === 'sentoo');
-  return online ? `Continue to payment, ${money(total)}` : `Place order, ${money(total)}`;
+  return online ? t('cart.to_payment', { price: money(total) }) : t('cart.place', { price: money(total) });
 }
 
 function keepFormValues(render) {
@@ -507,9 +516,9 @@ cartDialog.addEventListener('submit', async (event) => {
     if (el) el.focus();
     else cartDialog.querySelector('.error')?.scrollIntoView({ block: 'center' });
   };
-  if (name.length < 2) return fail('Please enter your name so we can call it out at pickup.', 'name');
-  if (phone.replace(/\D/g, '').length < 7) return fail('Please enter a phone number we can reach you on.', 'phone');
-  if (alcohol && !data.get('age')) return fail('Please confirm you are 18 or older to order alcohol.', 'age');
+  if (name.length < 2) return fail(t('cart.err_name'), 'name');
+  if (phone.replace(/\D/g, '').length < 7) return fail(t('cart.err_phone'), 'phone');
+  if (alcohol && !data.get('age')) return fail(t('cart.err_age'), 'age');
 
   store.set(CUSTOMER_KEY, { name, phone });
   form.sending = true;
@@ -541,7 +550,7 @@ cartDialog.addEventListener('submit', async (event) => {
     if (err.status === 409) {
       try {
         const data2 = await api('/api/menu');
-        state.menu = data2.menu;
+        state.menu = withPopular(data2.menu, data2.popular);
         state.availability = data2.availability;
         state.items = new Map(data2.menu.flatMap((c) => c.items).map((i) => [i.id, i]));
         state.cart = state.cart.filter((l) => state.items.has(l.item_id));
@@ -573,7 +582,7 @@ function renderAgain() {
   button.hidden = lines.length === 0 || state.cart.length > 0;
   if (button.hidden) return;
   const names = lines.map((l) => `${l.quantity} × ${state.items.get(l.item_id).name}`);
-  button.textContent = `Order the same again: ${names.slice(0, 3).join(', ')}${names.length > 3 ? ` and ${names.length - 3} more` : ''}`;
+  button.textContent = t('again.button', { items: `${names.slice(0, 3).join(', ')}${names.length > 3 ? t('again.more', { n: names.length - 3 }) : ''}` });
 }
 
 $('again').addEventListener('click', () => {
@@ -595,7 +604,7 @@ function renderTracker() {
   }
   link.hidden = false;
   link.href = `/order?id=${last.id}`;
-  link.textContent = `Follow your order #${last.number}`;
+  link.textContent = t('track.link', { n: last.number });
 }
 
 $('menu').addEventListener('click', (event) => {
@@ -618,10 +627,11 @@ setInterval(async () => {
   if (itemDialog.open || cartDialog.open) return;
   try {
     const data = await api('/api/menu');
-    const changed = JSON.stringify(data.menu) !== JSON.stringify(state.menu) || data.availability.message !== state.availability.message;
+    const fresh = withPopular(data.menu, data.popular);
+    const changed = JSON.stringify(fresh) !== JSON.stringify(state.menu) || data.availability.message !== state.availability.message;
     state.availability = data.availability;
     if (changed) {
-      state.menu = data.menu;
+      state.menu = fresh;
       state.items = new Map(data.menu.flatMap((c) => c.items).map((i) => [i.id, i]));
       renderPage();
     }

@@ -64,6 +64,7 @@ const TEXT = {
     'item.missing': 'Choose {name}',
     'item.add': 'Add to order, {price}',
 
+    'cart.added': 'Added: {item}',
     'cart.view': 'View your order',
     'cart.title': 'Your order',
     'cart.empty': 'Your order is empty. Pick something from the menu to get started.',
@@ -205,6 +206,7 @@ const TEXT = {
     'item.missing': 'Skohe {name}',
     'item.add': 'Pone den pedido, {price}',
 
+    'cart.added': 'Añadí: {item}',
     'cart.view': 'Mira bo pedido',
     'cart.title': 'Bo pedido',
     'cart.empty': 'Bo pedido ta bashí. Skohe algu for di e menú pa kuminsá.',
