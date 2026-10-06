@@ -1,5 +1,5 @@
 // Order confirmation and live status for the customer.
-import { api, clockTime, esc, money } from '/shared.js';
+import { PLACE, api, clockTime, esc, money } from '/shared.js';
 
 const params = new URLSearchParams(location.search);
 const id = params.get('id') || '';
@@ -139,6 +139,7 @@ function render({ order, info }) {
       </div>
       <h1 class="ticket-status">${title}</h1>
       <p class="ticket-detail">${esc(detail)}</p>
+      ${active ? `<p class="ticket-where">Pickup at <a href="${esc(PLACE.mapUrl)}" rel="noopener">${esc(PLACE.address)}</a></p>` : ''}
       ${
         order.status === 'cancelled' || awaiting
           ? ''

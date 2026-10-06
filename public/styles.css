@@ -153,6 +153,8 @@ html:has(dialog[open]) { overflow: hidden; }
 .foot { background: var(--lava); margin-top: 4rem; }
 .foot-inner { max-width: 68rem; margin: 0 auto; padding: 2.5rem 1rem 3rem; display: grid; gap: 2rem; }
 @media (min-width: 46rem) { .foot-inner { grid-template-columns: 1fr 1fr; } }
+@media (min-width: 62rem) { .foot-inner { grid-template-columns: 1.3fr 1fr 1fr; } }
+.foot p { max-width: 26rem; }
 .foot h2 { font-size: 1.4rem; margin-bottom: 0.8rem; }
 .foot a { color: var(--ash); font-weight: 600; }
 .foot .muted { color: #f3d3c6; }

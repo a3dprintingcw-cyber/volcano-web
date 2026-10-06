@@ -1,5 +1,11 @@
 // Helpers shared by the customer site, the kitchen board and the admin page.
 
+// Where customers pick up their food.
+export const PLACE = {
+  address: 'F.D. Rooseveltweg 271, Willemstad',
+  mapUrl: 'https://www.google.com/maps/search/?api=1&query=Volcano+Street+Food%2C+Franklin+D.+Rooseveltweg+271%2C+Willemstad%2C+Cura%C3%A7ao',
+};
+
 export const money = (cents) => {
   const value = cents / 100;
   return `XCG ${Number.isInteger(value) ? value : value.toFixed(2)}`;

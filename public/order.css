@@ -21,3 +21,5 @@
 .btn-cancel { border-color: var(--ember); color: var(--smoke); }
 .ticket-cancelled .ticket-head { background: #d9c5a3; }
 @media (prefers-reduced-motion: reduce) { .steps li.is-now::before { animation: none; } }
+.ticket-where { text-align: center; margin: -0.4rem 0 1rem; padding: 0 1.2rem; font-weight: 600; }
+.ticket-where a { color: var(--lava-deep); }
