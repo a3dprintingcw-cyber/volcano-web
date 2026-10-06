@@ -9,6 +9,8 @@ let role = 'staff';
 let data = null;
 let sales = null;
 let toastTimer = null;
+const openDishes = new Set(); // dish editors the manager has open
+let addOpen = false;
 
 const toTime = (minutes) => `${String(Math.floor((minutes % 1440) / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
 const fromTime = (value, isClose) => {
@@ -86,6 +88,7 @@ function render() {
       <section class="panel">
         <h2>Menu</h2>
         <p>${admin ? 'Change a price or switch something off when it is sold out. Changes are saved straight away.' : 'Switch something off when it is sold out. Prices need the manager PIN.'}</p>
+        ${admin ? addDishForm() : ''}
         ${data.menu
           .map(
             (cat) => `
@@ -93,12 +96,21 @@ function render() {
           ${cat.items
             .map((item) => {
               const fixedPrice = !(item.price_cents === 0 && item.groups.some((g) => g.min > 0));
+              if (item.archived) {
+                return admin
+                  ? `<div class="row is-archived">
+                      <span class="row-name">${esc(item.name)} <span class="muted">(removed from the menu)</span></span>
+                      <button class="pill" type="button" data-restore="${item.id}">Put back</button>
+                    </div>`
+                  : '';
+              }
               return `
               <div class="row">
                 <span class="row-name">${esc(item.name)}</span>
                 ${fixedPrice ? priceInput('items', item.id, item.price_cents) : '<span class="muted">priced by size</span>'}
                 ${availableSwitch('items', item.id, item.available)}
               </div>
+              ${admin ? dishEditor(item) : ''}
               ${item.groups
                 .map(
                   (g) => `<div class="row-group">${esc(g.name)}</div>
@@ -119,6 +131,48 @@ function render() {
           .join('')}
       </section>
     </div>`;
+}
+
+// Name, description and photo of one dish, folded away until the manager opens it.
+function dishEditor(item) {
+  return `<details class="dish-edit" data-dish="${item.id}" ${openDishes.has(item.id) ? 'open' : ''}>
+    <summary>Edit name, description and photo</summary>
+    <div class="set">
+      <label>Name <input type="text" data-field="name" maxlength="60" value="${esc(item.name)}"></label>
+      <label>Description <input type="text" data-field="description" maxlength="200" value="${esc(item.description || '')}"></label>
+      <div class="dish-photo">
+        ${item.photo ? `<img src="${esc(item.photo.small)}" alt="" width="84" height="84">` : '<span class="dish-nophoto">No photo</span>'}
+        <label class="pill">${item.photo ? 'Change photo' : 'Add photo'}<input type="file" accept="image/*" data-photo hidden></label>
+        ${item.photo ? '<button class="pill" type="button" data-nophoto>Remove photo</button>' : ''}
+        <button class="pill is-danger" type="button" data-archive>Remove from menu</button>
+      </div>
+    </div>
+  </details>`;
+}
+
+function addDishForm() {
+  return `<details class="dish-edit dish-add" ${addOpen ? 'open' : ''}>
+    <summary>Add a new dish</summary>
+    <form class="set" id="add-dish">
+      <label>Menu section <select name="category_id" required>${data.menu.map((c) => `<option value="${c.id}">${esc(c.name)}</option>`).join('')}</select></label>
+      <label>Name <input type="text" name="name" maxlength="60" required></label>
+      <label>Description <input type="text" name="description" maxlength="200"></label>
+      <label>Price in guilders <input type="number" name="price" min="1" max="1000" step="0.5" inputmode="decimal" required></label>
+      <label class="switch"><input type="checkbox" name="alcohol"> Contains alcohol (customers confirm they are 18 or older)</label>
+      <button class="pill" type="submit">Add dish</button>
+      <p class="muted">You can add a photo after the dish is saved.</p>
+    </form>
+  </details>`;
+}
+
+// Shrinks a photo in the browser to a square JPEG, so any phone photo can be used.
+async function squareJpeg(file, size, quality) {
+  const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
+  const side = Math.min(bitmap.width, bitmap.height);
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = Math.min(size, side);
+  canvas.getContext('2d').drawImage(bitmap, (bitmap.width - side) / 2, (bitmap.height - side) / 2, side, side, 0, 0, canvas.width, canvas.height);
+  return canvas.toDataURL('image/jpeg', quality).split(',')[1];
 }
 
 const dayName = (iso) => new Date(`${iso}T12:00:00Z`).toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'short', timeZone: 'UTC' });
@@ -193,6 +247,35 @@ app.addEventListener('change', async (event) => {
     if (!ok) el.checked = !el.checked;
     return;
   }
+  const dish = el.closest('[data-dish]');
+  if (dish && el.dataset.field) {
+    const ok = await save(() => api(`/api/admin/items/${dish.dataset.dish}`, { method: 'PATCH', body: { [el.dataset.field]: el.value } }));
+    if (ok) {
+      await reload();
+      render();
+    }
+    return;
+  }
+  if (dish && 'photo' in el.dataset) {
+    const file = el.files[0];
+    if (!file) return;
+    toast('Uploading the photo…');
+    const ok = await save(async () => {
+      let small;
+      let large;
+      try {
+        [small, large] = await Promise.all([squareJpeg(file, 420, 0.8), squareJpeg(file, 900, 0.82)]);
+      } catch {
+        throw new Error('That file is not a photo this browser can read. Please try a JPG or PNG.');
+      }
+      await api(`/api/admin/items/${dish.dataset.dish}/photo`, { method: 'POST', body: { small, large } });
+    }, 'Photo saved');
+    if (ok) {
+      await reload();
+      render();
+    }
+    return;
+  }
   if (el.dataset.price) {
     const cents = Math.round(Number(el.value) * 100);
     if (!Number.isFinite(cents) || cents < 0) return toast('Enter a price of 0 or more.', true);
@@ -217,8 +300,60 @@ app.addEventListener('change', async (event) => {
   }
 });
 
+async function changeDish(id, body, message) {
+  if (await save(() => api(`/api/admin/items/${id}`, { method: 'PATCH', body }), message)) {
+    await reload();
+    render();
+  }
+}
+
 app.addEventListener('click', (event) => {
-  if (event.target.closest('[data-signout]')) signOut();
+  if (event.target.closest('[data-signout]')) return signOut();
+  const restore = event.target.closest('[data-restore]');
+  if (restore) return changeDish(restore.dataset.restore, { archived: false }, 'Back on the menu');
+  const dish = event.target.closest('[data-dish]');
+  if (!dish) return;
+  if (event.target.closest('[data-nophoto]')) return changeDish(dish.dataset.dish, { image: '' }, 'Photo removed');
+  if (event.target.closest('[data-archive]')) {
+    openDishes.delete(Number(dish.dataset.dish));
+    return changeDish(dish.dataset.dish, { archived: true }, 'Removed from the menu');
+  }
+});
+
+// Remember which editors are open, so saving does not fold them shut.
+app.addEventListener(
+  'toggle',
+  (event) => {
+    const el = event.target;
+    if (el.matches?.('.dish-add')) addOpen = el.open;
+    else if (el.dataset?.dish) openDishes[el.open ? 'add' : 'delete'](Number(el.dataset.dish));
+  },
+  true
+);
+
+app.addEventListener('submit', async (event) => {
+  if (event.target.id !== 'add-dish') return;
+  event.preventDefault();
+  const form = new FormData(event.target);
+  let created = null;
+  const ok = await save(async () => {
+    created = await api('/api/admin/items', {
+      method: 'POST',
+      body: {
+        category_id: Number(form.get('category_id')),
+        name: form.get('name'),
+        description: form.get('description'),
+        price_cents: Math.round(Number(form.get('price')) * 100),
+        alcohol: !!form.get('alcohol'),
+      },
+    });
+  }, 'Dish added');
+  if (!ok) return;
+  addOpen = false;
+  openDishes.add(created.id);
+  await reload();
+  render();
+  app.querySelector(`[data-dish="${created.id}"]`)?.scrollIntoView({ block: 'center' });
 });
 
 role = await requireStaff(app, { title: 'Menu and hours' });

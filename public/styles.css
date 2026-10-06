@@ -262,3 +262,18 @@ fieldset.group legend { padding: 0; font-weight: 700; font-size: 1.05rem; displa
 @media (prefers-reduced-motion: reduce) {
   .cartbar.bump { animation: none; }
 }
+
+/* Language switch in the top bar */
+.lang {
+  margin-left: auto;
+  padding: 6px 12px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.lang[hidden] { display: none; }

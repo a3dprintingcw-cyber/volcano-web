@@ -20,12 +20,13 @@
   <script type="application/ld+json">{"@context": "https://schema.org", "@type": "Restaurant", "name": "Volcano Street Food", "url": "https://volcanostreetfood.com/", "image": "https://volcanostreetfood.com/img/spread-900.webp", "logo": "https://volcanostreetfood.com/img/icon-512.png", "telephone": "+59995652266", "servesCuisine": ["Street food", "Burgers", "Tacos", "Grill"], "priceRange": "$$", "currenciesAccepted": "XCG", "address": {"@type": "PostalAddress", "streetAddress": "Franklin D. Rooseveltweg 271", "addressLocality": "Willemstad", "addressCountry": "CW"}, "geo": {"@type": "GeoCoordinates", "latitude": 12.1514323, "longitude": -68.9476067}, "openingHoursSpecification": [{"@type": "OpeningHoursSpecification", "dayOfWeek": ["Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"], "opens": "18:00", "closes": "23:59"}], "sameAs": ["https://www.instagram.com/volcanostreetfood", "https://www.tiktok.com/@volcano.street.fo"], "potentialAction": {"@type": "OrderAction", "target": "https://volcanostreetfood.com/", "deliveryMethod": "http://purl.org/goodrelations/v1#DeliveryModePickUp"}}</script>
 </head>
 <body>
-  <a class="skip" href="#cats">Skip to the menu</a>
+  <a class="skip" href="#cats" data-t="skip">Skip to the menu</a>
 
   <header class="top">
     <div class="top-bar">
       <a class="top-phone" id="phone-link" href="tel:+59995652266">+599 9 565 2266</a>
       <span class="status" id="status" aria-live="polite"></span>
+      <button class="lang" type="button" data-lang-switch hidden></button>
     </div>
     <div class="drip" aria-hidden="true"></div>
   </header>
@@ -34,10 +35,10 @@
     <div class="hero-text">
       <img class="logo" src="/img/logo.png" width="224" height="225" alt="Volcano Street Food">
       <h1>Eruption of flavors</h1>
-      <p class="hero-sub">Order here, pick it up hot.</p>
-      <p class="hero-hours" id="hero-hours">Tuesday to Sunday, 6 PM to 12 AM</p>
+      <p class="hero-sub" data-t="hero.sub">Order here, pick it up hot.</p>
+      <p class="hero-hours" id="hero-hours" data-t="hero.hours">Tuesday to Sunday, 6 PM to 12 AM</p>
       <p class="hero-wait" id="hero-wait" hidden></p>
-      <a class="btn btn-primary" href="#cats">See the menu</a>
+      <a class="btn btn-primary" href="#cats" data-t="hero.cta">See the menu</a>
     </div>
     <picture class="hero-photo">
       <source media="(min-width: 700px)" srcset="/img/spread-900.webp">
@@ -49,24 +50,24 @@
   <a class="tracker" id="tracker" hidden></a>
   <button class="tracker tracker-again" id="again" type="button" hidden></button>
 
-  <div class="cats" id="cats" role="tablist" aria-label="Menu sections"></div>
+  <div class="cats" id="cats" role="tablist" aria-label="Menu sections" data-t="foot.sections" data-t-attr="aria-label"></div>
 
   <main id="menu" class="menu" role="tabpanel" aria-busy="true">
-    <p class="loading">Loading the menu…</p>
+    <p class="loading" data-t="menu.loading">Loading the menu…</p>
   </main>
 
   <footer class="foot">
     <div class="foot-inner">
       <div>
-        <h2>About us</h2>
-        <p>Bold street food, cooked fresh every day: burgers, loaded fries, tacos, kapsalon and plates from the grill.</p>
-        <p>Order here and pick it up, or come eat with us on the rooftop terrace.</p>
-        <p class="muted">Ask for our vegetarian options.</p>
+        <h2 data-t="foot.about">About us</h2>
+        <p data-t="foot.about_1">Bold street food, cooked fresh every day: burgers, loaded fries, tacos, kapsalon and plates from the grill.</p>
+        <p data-t="foot.about_2">Order here and pick it up, or come eat with us on the rooftop terrace.</p>
+        <p class="muted" data-t="foot.veg">Ask for our vegetarian options.</p>
       </div>
       <div>
-        <h2>Find us</h2>
+        <h2 data-t="foot.find">Find us</h2>
         <p>F.D. Rooseveltweg 271<br>Willemstad, Curaçao</p>
-        <p><a href="https://www.google.com/maps/search/?api=1&amp;query=Volcano+Street+Food%2C+Franklin+D.+Rooseveltweg+271%2C+Willemstad%2C+Cura%C3%A7ao" rel="noopener">Open in Google Maps</a></p>
+        <p><a href="https://www.google.com/maps/search/?api=1&amp;query=Volcano+Street+Food%2C+Franklin+D.+Rooseveltweg+271%2C+Willemstad%2C+Cura%C3%A7ao" rel="noopener" data-t="foot.maps">Open in Google Maps</a></p>
         <p><a id="foot-phone" href="tel:+59995652266">+599 9 565 2266</a></p>
         <p>
           <a href="https://www.instagram.com/volcanostreetfood" rel="noopener">Instagram</a>,
@@ -75,7 +76,7 @@
         </p>
       </div>
       <div>
-        <h2>Opening hours</h2>
+        <h2 data-t="foot.hours">Opening hours</h2>
         <dl class="hours" id="hours"></dl>
       </div>
     </div>
@@ -85,7 +86,7 @@
 
   <button class="cartbar" id="cartbar" type="button" hidden>
     <span class="cartbar-count" id="cartbar-count">0</span>
-    <span class="cartbar-label">View your order</span>
+    <span class="cartbar-label" data-t="cart.view">View your order</span>
     <span class="cartbar-total" id="cartbar-total"></span>
   </button>
 

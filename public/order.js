@@ -1,5 +1,8 @@
 // Order confirmation and live status for the customer.
 import { PLACE, api, clockTime, esc, money } from '/shared.js';
+import { t, translatePage } from '/i18n.js';
+
+translatePage();
 
 const params = new URLSearchParams(location.search);
 const id = params.get('id') || '';
@@ -53,11 +56,11 @@ async function switchOnNotifications({ ask }) {
 
 function notifyBlock(active) {
   if (!active) return '';
-  if (notifyState === 'on') return '<p class="notify is-on">We will send a notification to this phone when your food is ready.</p>';
-  if (notifyState === 'working') return '<p class="notify">Switching on notifications…</p>';
-  if (notifyState === 'blocked') return '<p class="notify">Notifications are blocked for this site. Keep this page open and it will chime when your food is ready.</p>';
-  if (notifyState === 'off') return '<button class="btn btn-primary" type="button" id="notify-me">Notify me when it is ready</button>';
-  return `<p class="notify">Keep this page open and it will chime when your food is ready.${isIphoneTab ? ' To get a notification instead, add this site to your home screen first.' : ''}</p>`;
+  if (notifyState === 'on') return `<p class="notify is-on">${t('notify.on')}</p>`;
+  if (notifyState === 'working') return `<p class="notify">${t('notify.working')}</p>`;
+  if (notifyState === 'blocked') return `<p class="notify">${t('notify.blocked')}</p>`;
+  if (notifyState === 'off') return `<button class="btn btn-primary" type="button" id="notify-me">${t('notify.button')}</button>`;
+  return `<p class="notify">${t('notify.keep_open')}${isIphoneTab ? ` ${t('notify.iphone')}` : ''}</p>`;
 }
 
 // Tell the customer the food is ready, even if the phone is in their pocket.
@@ -82,11 +85,11 @@ function announceReady(order) {
   } catch {
     /* sound may be blocked until the page is tapped */
   }
-  document.title = `Ready! Order ${order.number} | Volcano Street Food`;
+  document.title = `${t('order.ready_title', { n: order.number })} | Volcano Street Food`;
 }
 const ticket = document.getElementById('ticket');
 const STEPS = ['new', 'preparing', 'ready'];
-const STEP_LABELS = { new: 'Received', preparing: 'Cooking', ready: 'Ready' };
+const STEP_LABELS = { new: t('order.step_new'), preparing: t('order.step_preparing'), ready: t('order.step_ready') };
 let timer = null;
 
 // What to tell a customer whose online payment is not confirmed yet.
@@ -100,34 +103,34 @@ function paymentText(order) {
     (!checkedSinceReturn && ['pending', 'success'].includes(returnedAttempt));
   if (maybeInProgress) {
     return {
-      title: 'Confirming your payment',
-      detail: 'Your bank is still processing it. This usually takes less than a minute. Keep this page open and it will update by itself.',
+      title: t('pay.confirming'),
+      detail: t('pay.confirming_detail'),
       retry: false,
     };
   }
   if (order.pay_state === 'failed') {
     return {
-      title: 'Payment problem',
-      detail: 'A technical problem stopped the payment and Sentoo has been notified. Please call us so we can sort out your order.',
+      title: t('pay.problem'),
+      detail: t('pay.problem_detail'),
       retry: false,
     };
   }
   if (attempt === 'rejected') {
     return {
-      title: 'Payment was rejected',
-      detail: `${order.pay_message ? `Your bank said: ${order.pay_message}. ` : ''}Nothing was charged. You can try again, with another bank or card if you like.`,
+      title: t('pay.rejected'),
+      detail: `${order.pay_message ? `${t('pay.bank_said', { message: order.pay_message })} ` : ''}${t('pay.rejected_detail')}`,
       retry: true,
-      retryLabel: 'Try payment again',
+      retryLabel: t('pay.retry'),
     };
   }
   if (attempt === 'cancelled' || returnedAttempt === 'cancelled') {
-    return { title: 'Payment was cancelled', detail: 'Nothing was charged. Your order is held until it is paid.', retry: true, retryLabel: 'Try payment again' };
+    return { title: t('pay.cancelled'), detail: t('pay.cancelled_detail'), retry: true, retryLabel: t('pay.retry') };
   }
   return {
-    title: 'Waiting for your payment',
-    detail: 'Your order goes to the kitchen as soon as it is paid.',
+    title: t('pay.waiting'),
+    detail: t('pay.waiting_detail'),
     retry: true,
-    retryLabel: 'Pay now',
+    retryLabel: t('pay.now'),
   };
 }
 
@@ -138,21 +141,21 @@ function statusText(order) {
     return [p.title, p.detail];
   }
   if (order.status === 'cancelled' && order.payment_method === 'sentoo' && order.payment_status !== 'paid') {
-    return ['Order cancelled', 'The payment was not completed in time, so this order was cancelled. Nothing was charged. You are welcome to order again.'];
+    return [t('order.cancelled'), t('order.cancelled_payment')];
   }
   switch (order.status) {
     case 'new':
-      return ['We got your order', `We will start cooking soon. Pick up around ${time}.`];
+      return [t('order.new'), t('order.new_detail', { time })];
     case 'preparing':
-      return ['We are making your order', `Pick up around ${time}.`];
+      return [t('order.preparing'), t('order.preparing_detail', { time })];
     case 'ready':
-      return ['Ready for pickup', `Come and get it, ${order.customer_name}. Tell us your order number.`];
+      return [t('order.ready'), t('order.ready_detail', { name: order.customer_name })];
     case 'done':
-      return ['Picked up', 'Enjoy your food, and thank you for ordering.'];
+      return [t('order.done'), t('order.done_detail')];
     default:
       return order.cancelled_by === 'customer'
-        ? ['Order cancelled', 'You cancelled this order. Nothing is owed. You are welcome to order again.']
-        : ['Order cancelled', 'This order was cancelled. Call us if that is a surprise.'];
+        ? [t('order.cancelled'), t('order.cancelled_you')]
+        : [t('order.cancelled'), t('order.cancelled_other')];
   }
 }
 
@@ -167,26 +170,26 @@ function render({ order, info }) {
   const active = awaiting || ['new', 'preparing', 'ready'].includes(order.status);
   const paidNote =
     order.payment_status === 'paid'
-      ? `${order.payment_method === 'sentoo' ? 'Paid online' : 'Paid'}. Thank you.${info.payment_test && order.payment_method === 'sentoo' ? ' This was a test payment, no real money was charged.' : ''}`
+      ? `${order.payment_method === 'sentoo' ? t('order.paid_online') : t('order.paid')}${info.payment_test && order.payment_method === 'sentoo' ? ` ${t('order.paid_test')}` : ''}`
       : awaiting
-        ? 'Not paid yet.'
-        : 'Pay when you pick up your order.';
+        ? t('order.not_paid')
+        : t('cart.pay_note');
   const tel = `tel:${info.phone.replace(/[^\d+]/g, '')}`;
   document.getElementById('phone-link').href = tel;
   document.getElementById('phone-link').textContent = info.phone;
-  document.title = order.status === 'ready' ? `Ready! Order ${order.number} | Volcano Street Food` : `#${order.number}: ${title} | Volcano Street Food`;
+  document.title = order.status === 'ready' ? `${t('order.ready_title', { n: order.number })} | Volcano Street Food` : `#${order.number}: ${title} | Volcano Street Food`;
 
   ticket.innerHTML = `
     <div class="ticket-card ${order.status === 'cancelled' ? 'ticket-cancelled' : ''}">
       <div class="ticket-head">
-        <p>Order number</p>
+        <p>${t('order.number')}</p>
         <p class="ticket-number">${order.number}</p>
-        <p>for ${esc(order.customer_name)}</p>
+        <p>${esc(t('order.for', { name: order.customer_name }))}</p>
       </div>
-      <h1 class="ticket-status">${title}</h1>
+      <h1 class="ticket-status">${esc(title)}</h1>
       <p class="ticket-detail">${esc(detail)}</p>
       ${awaiting ? '' : `<div class="ticket-notify">${notifyBlock(active && order.status !== 'ready')}</div>`}
-      ${active ? `<p class="ticket-where">Pickup at <a href="${esc(PLACE.mapUrl)}" rel="noopener">${esc(PLACE.address)}</a></p>` : ''}
+      ${active ? `<p class="ticket-where">${t('order.pickup_at')} <a href="${esc(PLACE.mapUrl)}" rel="noopener">${esc(PLACE.address)}</a></p>` : ''}
       ${
         order.status === 'cancelled' || awaiting
           ? ''
@@ -198,7 +201,7 @@ function render({ order, info }) {
       <ul class="lines">
         ${order.items
           .map((l) => {
-            const details = [...l.options, l.note && `Note: ${l.note}`].filter(Boolean).join(', ');
+            const details = [...l.options, l.note && t('cart.note', { note: l.note })].filter(Boolean).join(', ');
             return `<li class="line">
               <span class="line-name">${l.quantity} × ${esc(l.name)}</span>
               <span class="line-price">${money(l.unit_price_cents * l.quantity)}</span>
@@ -207,15 +210,15 @@ function render({ order, info }) {
           })
           .join('')}
       </ul>
-      <div class="total"><span>Total</span><span>${money(order.total_cents)}</span></div>
-      <p class="ticket-meta">${esc(paidNote)}${order.notes ? `<br>Your note: ${esc(order.notes)}` : ''}</p>
+      <div class="total"><span>${t('cart.total')}</span><span>${money(order.total_cents)}</span></div>
+      <p class="ticket-meta">${esc(paidNote)}${order.notes ? `<br>${esc(t('order.your_note', { note: order.notes }))}` : ''}</p>
     </div>
     <div class="ticket-actions">
       ${payment && payment.retry && order.pay_url ? `<a class="btn btn-primary" href="${esc(order.pay_url)}">${payment.retryLabel}</a>` : ''}
-      ${active ? `<a class="btn btn-quiet" href="${tel}">Need to change something? Call ${esc(info.phone)}</a>` : ''}
+      ${active ? `<a class="btn btn-quiet" href="${tel}">${esc(t('order.call', { phone: info.phone }))}</a>` : ''}
       ${cancelError ? `<p class="error" role="alert">${esc(cancelError)}</p>` : ''}
-      ${order.can_cancel ? `<button class="btn btn-quiet btn-cancel" type="button" id="cancel-order">${confirmingCancel ? 'Tap again to cancel this order' : 'Cancel this order'}</button>` : ''}
-      <a class="btn ${payment && payment.retry ? 'btn-quiet' : 'btn-primary'}" href="/">${active ? 'Back to the menu' : 'Order again'}</a>
+      ${order.can_cancel ? `<button class="btn btn-quiet btn-cancel" type="button" id="cancel-order">${confirmingCancel ? t('order.cancel_confirm') : t('order.cancel')}</button>` : ''}
+      <a class="btn ${payment && payment.retry ? 'btn-quiet' : 'btn-primary'}" href="/">${active ? t('order.back') : t('order.again')}</a>
     </div>`;
   return { active, awaiting };
 }
@@ -241,9 +244,9 @@ async function refresh() {
     if (!active && timer) clearInterval(timer);
   } catch (err) {
     if (err.status === 404 || !ticket.querySelector('.ticket-card')) {
-      ticket.innerHTML = `<div class="ticket-card"><h1 class="ticket-status">${err.status === 404 ? 'Order not found' : 'Could not load your order'}</h1>
-        <p class="ticket-detail">${esc(err.status === 404 ? 'Check the link, or call us and we will look it up.' : err.message)}</p></div>
-        <div class="ticket-actions"><a class="btn btn-primary" href="/">Back to the menu</a></div>`;
+      ticket.innerHTML = `<div class="ticket-card"><h1 class="ticket-status">${err.status === 404 ? t('order.not_found') : t('order.load_failed')}</h1>
+        <p class="ticket-detail">${esc(err.status === 404 ? t('order.not_found_detail') : err.message)}</p></div>
+        <div class="ticket-actions"><a class="btn btn-primary" href="/">${t('order.back')}</a></div>`;
       if (err.status === 404 && timer) clearInterval(timer);
     }
   }
@@ -283,6 +286,6 @@ if (/^[0-9a-f-]{36}$/.test(id)) {
     if (!document.hidden) refresh();
   });
 } else {
-  ticket.innerHTML = `<div class="ticket-card"><h1 class="ticket-status">Order not found</h1><p class="ticket-detail">This link is missing its order code.</p></div>
-    <div class="ticket-actions"><a class="btn btn-primary" href="/">Back to the menu</a></div>`;
+  ticket.innerHTML = `<div class="ticket-card"><h1 class="ticket-status">${t('order.not_found')}</h1><p class="ticket-detail">${t('order.no_code')}</p></div>
+    <div class="ticket-actions"><a class="btn btn-primary" href="/">${t('order.back')}</a></div>`;
 }
