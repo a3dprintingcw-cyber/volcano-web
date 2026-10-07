@@ -63,6 +63,7 @@ function render() {
           }
         </div>
       </section>
+      ${admin ? reportPanel() : ''}
 
       ${
         admin
@@ -173,6 +174,25 @@ async function squareJpeg(file, size, quality) {
   canvas.width = canvas.height = Math.min(size, side);
   canvas.getContext('2d').drawImage(bitmap, (bitmap.width - side) / 2, (bitmap.height - side) / 2, side, side, 0, 0, canvas.width, canvas.height);
   return canvas.toDataURL('image/jpeg', quality).split(',')[1];
+}
+
+// The end of day email for the owners.
+function reportPanel() {
+  const s = data.settings;
+  return `<section class="panel">
+    <h2>Day report by email</h2>
+    <p>After closing, the day's sales, number of orders and best sellers are emailed to the owners.</p>
+    <div class="set">
+      <label>Send the report to <input type="text" id="report_email" maxlength="320" inputmode="email" autocomplete="off" value="${esc(s.report_email || '')}" placeholder="owner@example.com"></label>
+      <p class="muted">Up to three addresses, with a comma between them. Leave empty to switch the report off.</p>
+      ${
+        data.report_ready
+          ? `<button class="pill" type="button" data-report-send ${s.report_email ? '' : 'disabled'}>Send today's report now</button>`
+          : `<p class="muted">Email sending is not connected yet. It needs the restaurant's domain to be active. The address is saved, and the reports start by themselves once it is.</p>`
+      }
+      <details class="dish-edit" id="report-preview"><summary>See what tonight's email will say</summary><pre class="report-text">Loading…</pre></details>
+    </div>
+  </section>`;
 }
 
 const dayName = (iso) => new Date(`${iso}T12:00:00Z`).toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'short', timeZone: 'UTC' });
@@ -286,10 +306,16 @@ app.addEventListener('change', async (event) => {
     if (!ok) el.checked = !el.checked;
     return;
   }
-  const settingFields = { paused_message: 'paused_message', prep_minutes: 'prep_minutes', last_order: 'last_order_minutes_before_close', phone: 'phone' };
+  const settingFields = { paused_message: 'paused_message', prep_minutes: 'prep_minutes', last_order: 'last_order_minutes_before_close', phone: 'phone', report_email: 'report_email' };
   if (settingFields[el.id]) {
     const value = el.type === 'number' ? Number(el.value) : el.value;
-    return save(() => api('/api/admin/settings', { method: 'PUT', body: { [settingFields[el.id]]: value } }));
+    const ok = await save(() => api('/api/admin/settings', { method: 'PUT', body: { [settingFields[el.id]]: value } }));
+    if (ok && el.id === 'report_email') {
+      data.settings.report_email = el.value.trim();
+      const button = app.querySelector('[data-report-send]');
+      if (button) button.disabled = !data.settings.report_email;
+    }
+    return;
   }
   if (el.closest('.day')) {
     const row = el.closest('.day');
@@ -309,6 +335,11 @@ async function changeDish(id, body, message) {
 
 app.addEventListener('click', (event) => {
   if (event.target.closest('[data-signout]')) return signOut();
+  if (event.target.closest('[data-report-send]')) {
+    return save(async () => {
+      await api('/api/admin/report', { method: 'POST', body: {} });
+    }, 'Report sent');
+  }
   const restore = event.target.closest('[data-restore]');
   if (restore) return changeDish(restore.dataset.restore, { archived: false }, 'Back on the menu');
   const dish = event.target.closest('[data-dish]');
@@ -325,6 +356,14 @@ app.addEventListener(
   'toggle',
   (event) => {
     const el = event.target;
+    if (el.id === 'report-preview') {
+      if (el.open) {
+        api('/api/admin/report')
+          .then((r) => (el.querySelector('pre').textContent = `Subject: ${r.subject}\n\n${r.text}`))
+          .catch((err) => (el.querySelector('pre').textContent = err.message));
+      }
+      return;
+    }
     if (el.matches?.('.dish-add')) addOpen = el.open;
     else if (el.dataset?.dish) openDishes[el.open ? 'add' : 'delete'](Number(el.dataset.dish));
   },

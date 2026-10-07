@@ -3,6 +3,7 @@
 // Data lives in a D1 database bound as DB.
 
 import { availability, describeHours, localClock } from './hours.js';
+import { dayReport, parseRecipients, reportEmail, reportReady, sendDueReport, sendReport } from './report.js';
 import { notificationFor, notifyOrder, validEndpoint, vapidKeys } from './push.js';
 import {
   PAYMENT_MINUTES,
@@ -719,6 +720,13 @@ function validateSettings(input, current) {
   if ('ordering_paused' in input) next.ordering_paused = Boolean(input.ordering_paused);
   if ('paused_message' in input) next.paused_message = cleanText(input.paused_message, 160);
   if ('phone' in input) next.phone = cleanText(input.phone, 30);
+  if ('report_email' in input) {
+    try {
+      next.report_email = parseRecipients(input.report_email).join(', ');
+    } catch (err) {
+      throw new HttpError(400, err.message);
+    }
+  }
   if ('prep_minutes' in input) {
     const n = Number(input.prep_minutes);
     if (!Number.isInteger(n) || n < 5 || n > 120) throw new HttpError(400, 'Preparation time must be between 5 and 120 minutes.');
@@ -918,7 +926,8 @@ async function handleApi(request, env, url, ctx) {
   if (path === '/api/staff/menu' && method === 'GET') {
     const role = await requireRole(request, env, 'staff');
     const [settings, menu] = await Promise.all([loadSettings(db), loadMenu(db, { withArchived: true })]);
-    return json({ role, menu, settings });
+    // Who receives the sales report is the manager's business only.
+    return json({ role, menu, settings: role === 'admin' ? settings : { ...settings, report_email: undefined }, report_ready: reportReady(env) });
   }
 
   // Manager only
@@ -994,6 +1003,23 @@ async function handleApi(request, env, url, ctx) {
     await requireRole(request, env, 'admin');
     return json(await salesSummary(db, await loadSettings(db)));
   }
+  // The day report: GET shows what tonight's email will say, POST sends today's figures now.
+  if (path === '/api/admin/report' && (method === 'GET' || method === 'POST')) {
+    await requireRole(request, env, 'admin');
+    const settings = await loadSettings(db);
+    const day = localClock(Date.now(), settings.timezone_offset_minutes).date;
+    const report = await dayReport(db, day);
+    const origin = new URL(request.url).origin;
+    if (method === 'POST') {
+      try {
+        return json({ ok: true, sent_to: await sendReport(env, settings, report, origin) });
+      } catch (err) {
+        throw new HttpError(400, err.message);
+      }
+    }
+    const email = reportEmail(report, settings, origin);
+    return json({ day, ready: reportReady(env), subject: email.subject, text: email.text });
+  }
   if (path === '/api/admin/settings' && method === 'PUT') {
     await requireRole(request, env, 'admin');
     const current = await loadSettings(db);
@@ -1027,6 +1053,7 @@ export default {
   },
   async scheduled(controller, env, ctx) {
     ctx.waitUntil(closeAbandonedPayments(env));
+    ctx.waitUntil(sendDueReport(env));
   },
 };
 
