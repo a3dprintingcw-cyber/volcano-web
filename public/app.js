@@ -189,7 +189,7 @@ function openItem(id) {
   const close = `<button class="sheet-close" type="button" data-close aria-label="${t('item.close')}">×</button>`;
   itemDialog.innerHTML = `
     <div class="sheet-scroll">
-      ${item.photo ? `<div class="sheet-photo-wrap"><img class="sheet-photo" src="${esc(item.photo.large)}" alt="${esc(item.name)}">${close}</div>` : ''}
+      ${item.photo ? `<div class="sheet-photo-wrap"><img class="sheet-photo ${/\/img\/drink-/.test(item.photo.large) ? 'is-packshot' : ''}" src="${esc(item.photo.large)}" alt="${esc(item.name)}">${close}</div>` : ''}
       <div class="sheet-head"><h2 id="item-title">${esc(item.name)}</h2>${item.photo ? '' : close}</div>
       ${item.description ? `<p class="sheet-desc">${esc(item.description)}</p>` : ''}
       ${groups}
