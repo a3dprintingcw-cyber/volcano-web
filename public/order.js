@@ -1,6 +1,7 @@
 // Order confirmation and live status for the customer.
 import { PLACE, api, clockTime, esc, money } from '/shared.js';
 import { t, translatePage } from '/i18n.js';
+import { erupt, volcanoScene } from '/volcano.js';
 
 translatePage();
 
@@ -159,9 +160,28 @@ function statusText(order) {
   }
 }
 
+// The volcano follows the order: asleep, heating up, erupting, cooled down.
+const volcanoStage = (order) => ({ awaiting_payment: 'new', new: 'new', preparing: 'preparing', ready: 'ready', done: 'done' }[order.status] || null);
+let lastHtml = '';
+let shownStage = null;
+const ERUPTED_KEY = `volcano_erupted_${id}`;
+
+function eruptOnce(order) {
+  // Once per order on this phone, so a reload does not set it off again.
+  try {
+    if (sessionStorage.getItem(ERUPTED_KEY)) return;
+    sessionStorage.setItem(ERUPTED_KEY, '1');
+  } catch {
+    /* private mode: it may erupt again after a reload, which is harmless */
+  }
+  erupt({ number: order.number, title: t('order.ready') });
+}
+
 function render({ order, info }) {
   latest = { order, info };
-  if (lastStatus && lastStatus !== 'ready' && order.status === 'ready') announceReady(order);
+  const becameReady = lastStatus && lastStatus !== 'ready' && order.status === 'ready';
+  const openedReady = !lastStatus && order.status === 'ready';
+  if (becameReady) announceReady(order);
   lastStatus = order.status;
   const [title, detail] = statusText(order);
   const at = STEPS.indexOf(order.status === 'done' ? 'ready' : order.status);
@@ -179,8 +199,12 @@ function render({ order, info }) {
   document.getElementById('phone-link').textContent = info.phone;
   document.title = order.status === 'ready' ? `${t('order.ready_title', { n: order.number })} | Volcano Street Food` : `#${order.number}: ${title} | Volcano Street Food`;
 
-  ticket.innerHTML = `
+  const stage = volcanoStage(order);
+  // 'STAGE' is filled in below: the volcano is first drawn at the stage it was last shown
+  // and then moved on, so the lava is seen to rise.
+  const html = `
     <div class="ticket-card ${order.status === 'cancelled' ? 'ticket-cancelled' : ''}">
+      ${stage ? volcanoScene('STAGE', esc(title)) : ''}
       <div class="ticket-head">
         <p>${t('order.number')}</p>
         <p class="ticket-number">${order.number}</p>
@@ -220,6 +244,17 @@ function render({ order, info }) {
       ${order.can_cancel ? `<button class="btn btn-quiet btn-cancel" type="button" id="cancel-order">${confirmingCancel ? t('order.cancel_confirm') : t('order.cancel')}</button>` : ''}
       <a class="btn ${payment && payment.retry ? 'btn-quiet' : 'btn-primary'}" href="/">${active ? t('order.back') : t('order.again')}</a>
     </div>`;
+  // The page is only redrawn when something changed, so the animations are not cut short every few seconds.
+  if (html !== lastHtml || stage !== shownStage) {
+    ticket.innerHTML = html.replace('volcano v-STAGE', `volcano v-${shownStage || stage}`);
+    lastHtml = html;
+    const scene = ticket.querySelector('.volcano');
+    if (scene && stage !== shownStage) {
+      requestAnimationFrame(() => requestAnimationFrame(() => (scene.className = `volcano v-${stage}`)));
+    }
+    shownStage = stage;
+  }
+  if (becameReady || openedReady) eruptOnce(order);
   return { active, awaiting };
 }
 

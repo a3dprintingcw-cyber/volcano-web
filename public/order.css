@@ -28,3 +28,116 @@
 @media (prefers-reduced-motion: reduce) { .steps li.is-now::before { animation: none; } }
 .ticket-where { text-align: center; margin: -0.4rem 0 1rem; padding: 0 1.2rem; font-weight: 600; }
 .ticket-where a { color: var(--lava-deep); }
+
+/* ---------- the volcano ---------- */
+/* It smokes when the order comes in, fills with lava while the kitchen cooks, and erupts when the food is ready. */
+.volcano { background: linear-gradient(#17110e, #2b1711 70%, #47200f); line-height: 0; overflow: hidden; }
+.volcano svg { display: block; width: 100%; height: auto; max-height: 14rem; }
+.v-star { fill: #fff3dd; opacity: 0.55; animation: v-twinkle 3s ease-in-out infinite; }
+.v-star-1 { animation-delay: 1s; }
+.v-star-2 { animation-delay: 2s; }
+.v-rock { fill: #3a2a22; }
+.v-rock-light { fill: #54392c; }
+.v-chamber { fill: #1d1411; }
+.v-crater { fill: #140d0a; }
+.v-pool { fill: #ffb224; opacity: 0; transition: opacity 1.2s ease; }
+.v-glow { fill: #ff8a1f; filter: blur(16px); opacity: 0.12; transform-box: fill-box; transform-origin: center; transition: opacity 1.2s ease; }
+.v-level { transform: translateY(104px); transition: transform 2.4s cubic-bezier(0.3, 0.7, 0.3, 1); }
+.v-stream { fill: none; stroke: #ff8a1f; stroke-width: 7; stroke-linecap: round; stroke-dasharray: 190; stroke-dashoffset: 190; opacity: 0; }
+.v-stream-2 { stroke: #ffb224; stroke-width: 5; }
+.v-smoke { fill: #c2b2a0; opacity: 0; transform-box: fill-box; transform-origin: center; animation: v-smoke 4.2s ease-out infinite; }
+.v-smoke-1 { animation-delay: 1.4s; }
+.v-smoke-2 { animation-delay: 2.8s; }
+.v-spark { fill: #ffb224; opacity: 0; }
+
+/* Order received: a sleeping volcano with a little smoke and a faint glow at the bottom. */
+.v-new .v-level { transform: translateY(104px); }
+
+/* Cooking: the lava climbs, the crater glows, the smoke comes faster and the ground trembles. */
+.v-preparing .v-level { transform: translateY(46px); }
+.v-preparing .v-pool { opacity: 0.55; animation: v-breathe 1.8s ease-in-out infinite; }
+.v-preparing .v-glow { opacity: 0.35; animation: v-breathe 1.8s ease-in-out infinite; }
+.v-preparing .v-smoke { animation-duration: 2.6s; }
+.v-preparing .v-mountain { animation: v-rumble 3.2s linear infinite; }
+.v-preparing .v-spark:nth-child(-n + 3) { animation: v-fly 2.4s ease-out infinite; }
+
+/* Ready: eruption. Lava runs down the sides and keeps fountaining from the crater. */
+.v-ready .v-level, .v-done .v-level { transform: translateY(0); }
+.v-ready .v-pool { opacity: 1; }
+.v-ready .v-glow { opacity: 0.75; animation: v-breathe 0.9s ease-in-out infinite; }
+.v-ready .v-smoke { animation: none; }
+.v-ready .v-stream { opacity: 1; animation: v-flow 1.6s ease-out forwards; }
+.v-ready .v-stream-1 { animation-delay: 0.25s; }
+.v-ready .v-stream-2 { animation-delay: 0.5s; }
+.v-ready .v-spark { animation: v-fly 1.5s ease-out infinite; }
+.v-ready .v-mountain { animation: v-rumble 0.5s linear 6; }
+
+/* Picked up: the lava has run out and cooled. */
+.v-done .v-stream { opacity: 0.9; stroke: #8a2f1c; stroke-dashoffset: 0; }
+.v-done .v-pool { opacity: 0.35; }
+.v-done .v-smoke { animation-duration: 6s; }
+
+/* Each spark flies its own way: --dx sideways, --dy up. */
+.v-spark-0 { --dx: -62px; --dy: -58px; }
+.v-spark-1 { --dx: 44px; --dy: -70px; animation-delay: 0.2s !important; }
+.v-spark-2 { --dx: -18px; --dy: -86px; animation-delay: 0.45s !important; }
+.v-spark-3 { --dx: 78px; --dy: -52px; animation-delay: 0.1s !important; }
+.v-spark-4 { --dx: -94px; --dy: -44px; animation-delay: 0.6s !important; }
+.v-spark-5 { --dx: 20px; --dy: -92px; animation-delay: 0.75s !important; }
+.v-spark-6 { --dx: -40px; --dy: -76px; animation-delay: 0.9s !important; }
+.v-spark-7 { --dx: 104px; --dy: -40px; animation-delay: 1.05s !important; }
+.v-spark-8 { --dx: -74px; --dy: -66px; animation-delay: 1.2s !important; }
+.v-spark-9 { --dx: 58px; --dy: -80px; animation-delay: 0.35s !important; }
+.v-spark-10 { --dx: -6px; --dy: -98px; animation-delay: 1.3s !important; }
+.v-spark-11 { --dx: 32px; --dy: -60px; animation-delay: 0.55s !important; }
+
+@keyframes v-twinkle { 50% { opacity: 0.15; } }
+@keyframes v-breathe { 50% { opacity: 0.25; } }
+@keyframes v-smoke {
+  0% { opacity: 0; transform: translateY(0) scale(0.6); }
+  20% { opacity: 0.42; }
+  100% { opacity: 0; transform: translateY(-58px) scale(2.4); }
+}
+@keyframes v-rumble {
+  0%, 86%, 100% { transform: translateX(0); }
+  88% { transform: translateX(-1.2px); }
+  91% { transform: translateX(1.4px); }
+  94% { transform: translateX(-1px); }
+  97% { transform: translateX(0.8px); }
+}
+@keyframes v-flow { to { stroke-dashoffset: 0; } }
+@keyframes v-fly {
+  0% { opacity: 1; transform: translate(0, 0); }
+  45% { opacity: 1; transform: translate(calc(var(--dx) * 0.6), var(--dy)); }
+  100% { opacity: 0; transform: translate(var(--dx), 34px); }
+}
+
+/* The full-screen eruption when the food is ready. */
+.eruption { position: fixed; inset: 0; z-index: 60; pointer-events: none; animation: eruption-flash 3.6s ease-out forwards; }
+.eruption canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.eruption-words {
+  position: absolute; left: 50%; top: 42%; transform: translate(-50%, -50%); text-align: center; white-space: nowrap;
+  color: var(--ash); font-family: var(--display); text-transform: uppercase; text-shadow: 0 4px 0 var(--lava-deep), 0 10px 40px rgba(0, 0, 0, 0.7);
+  animation: eruption-words 3.6s cubic-bezier(0.2, 1.4, 0.4, 1) forwards;
+}
+.eruption-words strong { display: block; font-weight: 400; font-size: clamp(5rem, 30vw, 11rem); line-height: 0.95; color: var(--magma); }
+.eruption-words span { display: block; font-size: clamp(1.3rem, 6.5vw, 2.4rem); margin-top: 0.5rem; }
+@keyframes eruption-flash {
+  0% { background: radial-gradient(circle at 50% 45%, rgba(255, 178, 36, 0.97), rgba(200, 53, 28, 0.95) 45%, rgba(23, 17, 14, 0.96)); }
+  16% { background: radial-gradient(circle at 50% 45%, rgba(127, 42, 25, 0.95), rgba(23, 17, 14, 0.96) 70%); }
+  78% { opacity: 1; background: radial-gradient(circle at 50% 45%, rgba(127, 42, 25, 0.95), rgba(23, 17, 14, 0.96) 70%); }
+  100% { opacity: 0; background: radial-gradient(circle at 50% 45%, rgba(127, 42, 25, 0.95), rgba(23, 17, 14, 0.96) 70%); }
+}
+@keyframes eruption-words {
+  0% { opacity: 0; transform: translate(-50%, -30%) scale(0.3); }
+  14% { opacity: 1; transform: translate(-50%, -50%) scale(1.08); }
+  22% { transform: translate(-50%, -50%) scale(1); }
+  80% { opacity: 1; }
+  100% { opacity: 0; transform: translate(-50%, -56%) scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .volcano *, .volcano { animation: none !important; transition: none !important; }
+  .v-ready .v-stream { stroke-dashoffset: 0; }
+  .v-ready .v-spark:nth-child(-n + 6) { opacity: 1; transform: translate(calc(var(--dx) * 0.6), var(--dy)); }
+}
