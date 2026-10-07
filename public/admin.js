@@ -11,6 +11,7 @@ let sales = null;
 let toastTimer = null;
 const openDishes = new Set(); // dish editors the manager has open
 let addOpen = false;
+let confirmReset = false;
 
 const toTime = (minutes) => `${String(Math.floor((minutes % 1440) / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
 const fromTime = (value, isClose) => {
@@ -52,11 +53,13 @@ function render() {
         <h2>Online ordering</h2>
         <div class="set">
           <label class="switch"><input type="checkbox" id="paused" ${s.ordering_paused ? 'checked' : ''}> Pause online orders</label>
+          <label class="switch"><input type="checkbox" id="closed_today" ${s.closed_today ? 'checked' : ''}> Closed today <span class="muted">(holiday or private event, opens again by itself tomorrow)</span></label>
+          <label class="switch"><input type="checkbox" id="busy_today" ${s.busy ? 'checked' : ''}> Busy today: add 15 minutes to the wait</label>
           ${
             admin
               ? `<label>Message customers see while paused
                   <input type="text" id="paused_message" maxlength="160" value="${esc(s.paused_message || '')}" placeholder="Online ordering is paused right now. Please check back soon."></label>
-                <label>Minutes to prepare an order <input type="number" id="prep_minutes" min="5" max="120" value="${s.prep_minutes}"></label>
+                <label>Minutes to prepare an order <input type="number" id="prep_minutes" min="5" max="120" value="${s.prep_base ?? s.prep_minutes}"></label>
                 <label>Stop taking orders this many minutes before closing <input type="number" id="last_order" min="0" max="120" value="${s.last_order_minutes_before_close}"></label>
                 <label>Phone number shown on the website <input type="text" id="phone" maxlength="30" value="${esc(s.phone || '')}"></label>`
               : ''
@@ -227,6 +230,8 @@ function salesPanel() {
             </tbody></table>`
           : '<p>Nothing sold yet.</p>'
       }
+      <p class="sales-reset"><button class="pill" type="button" data-sales-reset>${confirmReset ? 'Tap again: figures start from zero now' : 'Start the sales figures fresh'}</button>
+      <span class="muted">For after testing. Orders made before now stop counting. Nothing is deleted.</span></p>
     </section>`;
 }
 
@@ -301,6 +306,15 @@ app.addEventListener('change', async (event) => {
     if (!Number.isFinite(cents) || cents < 0) return toast('Enter a price of 0 or more.', true);
     return save(() => api(`/api/admin/${el.dataset.price}/${el.dataset.id}`, { method: 'PATCH', body: { price_cents: cents } }), 'Price saved');
   }
+  if (el.id === 'closed_today' || el.id === 'busy_today') {
+    const closing = el.id === 'closed_today';
+    const ok = await save(
+      () => api(`/api/staff/${closing ? 'closed' : 'busy'}`, { method: 'POST', body: { on: el.checked } }),
+      closing ? (el.checked ? 'Closed for today' : 'Open again today') : el.checked ? 'Wait is 15 minutes longer today' : 'Wait is back to normal'
+    );
+    if (!ok) el.checked = !el.checked;
+    return;
+  }
   if (el.id === 'paused') {
     const ok = await save(() => api('/api/staff/pause', { method: 'POST', body: { paused: el.checked } }), el.checked ? 'Online orders paused' : 'Online orders are open again');
     if (!ok) el.checked = !el.checked;
@@ -335,6 +349,23 @@ async function changeDish(id, body, message) {
 
 app.addEventListener('click', (event) => {
   if (event.target.closest('[data-signout]')) return signOut();
+  if (event.target.closest('[data-sales-reset]')) {
+    if (!confirmReset) {
+      confirmReset = true;
+      render();
+      setTimeout(() => {
+        if (!confirmReset) return;
+        confirmReset = false;
+        render();
+      }, 5000);
+      return;
+    }
+    confirmReset = false;
+    return save(() => api('/api/admin/sales/reset', { method: 'POST', body: {} }), 'Sales figures start from now').then(async () => {
+      await reload();
+      render();
+    });
+  }
   if (event.target.closest('[data-report-send]')) {
     return save(async () => {
       await api('/api/admin/report', { method: 'POST', body: {} });

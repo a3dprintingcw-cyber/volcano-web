@@ -64,3 +64,12 @@ test('paused ordering overrides everything', () => {
   assert.equal(a.can_order, false);
   assert.equal(a.message, 'Back in 30 minutes.');
 });
+
+test('"closed today" stops orders for that one day only', () => {
+  const closed = { ...base, closed_day: '2026-10-06' };
+  const tuesday = availability(closed, at('2026-10-06T19:00:00'));
+  assert.equal(tuesday.can_order, false);
+  assert.equal(tuesday.notice.key, 'closed_today');
+  assert.match(tuesday.message, /tomorrow at 6 PM/);
+  assert.equal(availability(closed, at('2026-10-07T19:00:00')).can_order, true, 'open again the next day');
+});

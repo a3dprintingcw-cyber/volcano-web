@@ -279,3 +279,25 @@ fieldset.group legend { padding: 0; font-weight: 700; font-size: 1.05rem; displa
   cursor: pointer;
 }
 .lang[hidden] { display: none; }
+
+/* Drinks and sides offered in the order sheet */
+.extras { padding: 0.2rem 1.2rem 0.6rem; }
+.extras h3 { font-size: 1rem; color: var(--lava); margin: 0.4rem 0 0.5rem; }
+.extras-row { display: flex; gap: 0.6rem; overflow-x: auto; padding-bottom: 0.4rem; scrollbar-width: none; }
+.extras-row::-webkit-scrollbar { display: none; }
+.extra {
+  flex: none; display: grid; gap: 0.15rem; text-align: left; min-width: 8.2rem; max-width: 11rem;
+  padding: 0.6rem 0.8rem; border: 2px solid #ead9bb; border-radius: 0.9rem; background: #fffaf0; color: var(--ink);
+  font: inherit; cursor: pointer;
+}
+.extra-name { font-weight: 700; }
+.extra-price { color: #5a4a3c; font-size: 0.92rem; display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; }
+.extra-price b { display: grid; place-items: center; width: 1.5rem; height: 1.5rem; border-radius: 50%; background: var(--magma); color: var(--ink); }
+
+/* Top bar on phones: number and language button on the first line, opening status below. */
+.top-phone { white-space: nowrap; }
+@media (max-width: 34rem) {
+  .top-bar { flex-wrap: wrap; gap: 0.25rem 0.8rem; }
+  .top-bar .status { order: 3; flex-basis: 100%; justify-content: flex-start; text-align: left; font-size: 0.9rem; }
+  .lang { padding: 4px 11px; }
+}

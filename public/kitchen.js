@@ -8,27 +8,72 @@ const COLUMNS = [
   { status: 'preparing', title: 'Cooking', empty: 'Nothing on the grill.', next: 'ready', action: 'Mark ready', back: 'new' },
   { status: 'ready', title: 'Ready for pickup', empty: 'Nothing waiting for pickup.', next: 'done', action: 'Picked up', back: 'preparing' },
 ];
-const state = { data: null, seen: null, fresh: new Set(), confirmCancel: null, offline: false, sound: store.get('volcano_sound', false), doneOpen: false };
+const state = { data: null, seen: null, fresh: new Set(), confirmCancel: null, offline: false, sound: store.get('volcano_sound', true), doneOpen: false, blocked: false };
 let audio = null;
 
+// The alarm: loud, and it keeps ringing until every new order has been started.
 function beep() {
   if (!state.sound) return;
   try {
     audio = audio || new AudioContext();
-    [0, 0.25, 0.5].forEach((delay) => {
+    // Browsers keep sound off until the page has been tapped once.
+    state.blocked = audio.state === 'suspended';
+    if (state.blocked) return;
+    [0, 0.22, 0.44, 0.9, 1.12, 1.34].forEach((delay, i) => {
       const osc = audio.createOscillator();
       const gain = audio.createGain();
-      osc.frequency.value = 880;
-      gain.gain.setValueAtTime(0.25, audio.currentTime + delay);
-      gain.gain.exponentialRampToValueAtTime(0.001, audio.currentTime + delay + 0.18);
+      osc.type = 'square';
+      osc.frequency.value = i % 3 === 2 ? 1320 : 990;
+      gain.gain.setValueAtTime(0.6, audio.currentTime + delay);
+      gain.gain.exponentialRampToValueAtTime(0.001, audio.currentTime + delay + 0.2);
       osc.connect(gain).connect(audio.destination);
       osc.start(audio.currentTime + delay);
-      osc.stop(audio.currentTime + delay + 0.2);
+      osc.stop(audio.currentTime + delay + 0.22);
     });
   } catch {
-    /* sound is a nice-to-have */
+    /* no sound on this device */
   }
 }
+
+const waitingOrders = () => (state.data ? state.data.orders.filter((o) => o.status === 'new').length : 0);
+setInterval(() => {
+  if (waitingOrders() > 0) beep();
+}, 4000);
+
+// The first tap anywhere unlocks sound.
+document.addEventListener(
+  'pointerdown',
+  () => {
+    if (!state.sound) return;
+    try {
+      audio = audio || new AudioContext();
+      audio.resume().then(() => {
+        if (state.blocked) {
+          state.blocked = false;
+          if (state.data) render();
+        }
+      });
+    } catch {
+      /* no sound on this device */
+    }
+  },
+  true
+);
+
+// Keep the tablet's screen on while the board is open.
+let wakeLock = null;
+async function keepAwake() {
+  try {
+    if (!('wakeLock' in navigator) || document.hidden || wakeLock) return;
+    wakeLock = await navigator.wakeLock.request('screen');
+    wakeLock.addEventListener('release', () => {
+      wakeLock = null;
+    });
+  } catch {
+    /* not allowed right now: tried again when the page is shown */
+  }
+}
+document.addEventListener('visibilitychange', keepAwake);
 
 function pickupLabel(order, serverTime) {
   const minutes = Math.round((order.pickup_at - serverTime) / 60);
@@ -88,16 +133,26 @@ function render() {
         ${data.ordering_paused ? 'Online orders paused. Tap to resume' : 'Pause online orders'}
       </button>
       <span class="wait" role="group" aria-label="Wait time customers are told">
-        <button class="pill" type="button" data-prep="-5" aria-label="5 minutes less" ${data.prep_minutes <= 5 ? 'disabled' : ''}>−</button>
+        <button class="pill" type="button" data-prep="-5" aria-label="5 minutes less" ${data.prep_base <= 5 ? 'disabled' : ''}>−</button>
         <span class="wait-value">Wait ${data.prep_minutes} min</span>
-        <button class="pill" type="button" data-prep="5" aria-label="5 minutes more" ${data.prep_minutes >= 120 ? 'disabled' : ''}>+</button>
+        <button class="pill" type="button" data-prep="5" aria-label="5 minutes more" ${data.prep_base >= 120 ? 'disabled' : ''}>+</button>
       </span>
+      <button class="pill ${data.busy ? 'is-warn' : ''}" type="button" data-busy="${data.busy ? '0' : '1'}" aria-pressed="${data.busy}" title="Adds ${data.busy_extra} minutes to the wait for the rest of today">
+        ${data.busy ? `Busy: +${data.busy_extra} min. Tap to end` : `Busy: +${data.busy_extra} min`}
+      </button>
       <button class="pill ${state.sound ? 'is-on' : ''}" type="button" data-sound aria-pressed="${state.sound}">Sound ${state.sound ? 'on' : 'off'}</button>
       <a href="/admin/">Menu and hours</a>
       <button class="pill" type="button" data-signout>Sign out</button>
     </header>
+    ${
+      !state.sound
+        ? '<p class="offline" role="alert">The alarm is off. New orders will not make a sound. Tap "Sound off" to switch it on.</p>'
+        : state.blocked
+          ? '<p class="offline" role="alert">Tap anywhere on this screen once to switch the alarm on.</p>'
+          : ''
+    }
     ${state.offline ? '<p class="offline" role="alert">No connection. Orders on screen may be out of date. Retrying…</p>' : ''}
-    <div class="board">
+    <div class="board ${fresh ? 'has-new' : ''}">
       ${COLUMNS.map((column) => {
         const orders = data.orders.filter((o) => o.status === column.status);
         return `<section class="col" aria-label="${column.title}">
@@ -155,7 +210,6 @@ async function refresh() {
       const arrived = [...ids].filter((id) => !state.seen.has(id));
       if (arrived.length) {
         arrived.forEach((id) => state.fresh.add(id));
-        beep();
         setTimeout(() => arrived.forEach((id) => state.fresh.delete(id)), 4000);
       }
     }
@@ -195,8 +249,11 @@ app.addEventListener('click', (event) => {
     return render();
   }
   if (target.dataset.prep) {
-    const minutes = Math.min(120, Math.max(5, state.data.prep_minutes + Number(target.dataset.prep)));
+    const minutes = Math.min(120, Math.max(5, state.data.prep_base + Number(target.dataset.prep)));
     return act(() => api('/api/staff/prep', { method: 'POST', body: { minutes } }));
+  }
+  if ('busy' in target.dataset) {
+    return act(() => api('/api/staff/busy', { method: 'POST', body: { on: target.dataset.busy === '1' } }));
   }
   if ('pause' in target.dataset) {
     return act(() => api('/api/staff/pause', { method: 'POST', body: { paused: target.dataset.pause === '1' } }));
@@ -231,4 +288,10 @@ app.addEventListener('toggle', (event) => {
 
 await requireStaff(app, { title: 'Kitchen board' });
 await refresh();
+keepAwake();
+// Ring straight away if orders are already waiting when the board opens.
+if (waitingOrders() > 0) {
+  beep();
+  if (state.blocked) render();
+}
 setInterval(refresh, 5000);

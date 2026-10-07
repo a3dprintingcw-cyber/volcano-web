@@ -17,6 +17,7 @@ import {
   webhookTransactionId,
 } from './sentoo.js';
 
+const BUSY_EXTRA_MINUTES = 15;
 const STATUSES = ['new', 'preparing', 'ready', 'done', 'cancelled'];
 const LIMITS = {
   lines: 30,
@@ -87,6 +88,13 @@ async function loadSettings(db) {
       settings[row.key] = row.value;
     }
   }
+  // Two switches last for one service day only, so nobody has to remember to undo them:
+  // "busy" adds time to the wait, "closed today" stops orders for the day.
+  const today = localClock(Date.now(), settings.timezone_offset_minutes || 0).date;
+  settings.prep_base = settings.prep_minutes;
+  settings.busy = settings.busy_day === today;
+  if (settings.busy) settings.prep_minutes = Math.min(180, settings.prep_minutes + BUSY_EXTRA_MINUTES);
+  settings.closed_today = settings.closed_day === today;
   return settings;
 }
 
@@ -174,13 +182,13 @@ async function popularItems(db, settings, menu) {
   const since = new Date(Date.parse(`${clock.date}T00:00:00Z`) - (POPULAR.days - 1) * 86_400_000).toISOString().slice(0, 10);
   const counted = "o.status IN ('new','preparing','ready','done')";
   const [orders, top] = await db.batch([
-    db.prepare(`SELECT COUNT(*) AS n FROM orders o WHERE ${counted} AND o.service_day >= ?`).bind(since),
+    db.prepare(`SELECT COUNT(*) AS n FROM orders o WHERE ${counted} AND o.service_day >= ? AND o.created_at >= ?`).bind(since, settings.sales_since || 0),
     db
       .prepare(
         `SELECT oi.item_id AS id, SUM(oi.quantity) AS quantity FROM order_items oi JOIN orders o ON o.id = oi.order_id
-         WHERE ${counted} AND o.service_day >= ? AND oi.item_id IS NOT NULL GROUP BY oi.item_id ORDER BY quantity DESC LIMIT 30`
+         WHERE ${counted} AND o.service_day >= ? AND o.created_at >= ? AND oi.item_id IS NOT NULL GROUP BY oi.item_id ORDER BY quantity DESC LIMIT 30`
       )
-      .bind(since),
+      .bind(since, settings.sales_since || 0),
   ]);
   if (orders.results[0].n < POPULAR.minOrders) return [];
   // Dishes only: drinks and sides sell the most everywhere and tell nobody anything.
@@ -553,22 +561,24 @@ async function salesSummary(db, settings) {
   const clock = localClock(Date.now(), settings.timezone_offset_minutes);
   const daysAgo = (n) => new Date(Date.parse(`${clock.date}T00:00:00Z`) - n * 86_400_000).toISOString().slice(0, 10);
   const counted = "status IN ('new','preparing','ready','done')";
+  // Orders from before this moment (demos, tests) are not counted.
+  const since = settings.sales_since || 0;
   const [days, top, cancelled] = await db.batch([
     db
       .prepare(
         `SELECT service_day AS day, COUNT(*) AS orders, SUM(total_cents) AS total_cents,
                 SUM(CASE WHEN payment_method = 'sentoo' AND payment_status = 'paid' THEN total_cents ELSE 0 END) AS online_cents
-         FROM orders WHERE ${counted} AND service_day >= ? GROUP BY service_day ORDER BY service_day DESC`
+         FROM orders WHERE ${counted} AND service_day >= ? AND created_at >= ? GROUP BY service_day ORDER BY service_day DESC`
       )
-      .bind(daysAgo(6)),
+      .bind(daysAgo(6), since),
     db
       .prepare(
         `SELECT oi.name AS name, SUM(oi.quantity) AS quantity, SUM(oi.quantity * oi.unit_price_cents) AS total_cents
          FROM order_items oi JOIN orders o ON o.id = oi.order_id
-         WHERE o.${counted} AND o.service_day >= ? GROUP BY oi.name ORDER BY quantity DESC, total_cents DESC LIMIT 10`
+         WHERE o.${counted} AND o.service_day >= ? AND o.created_at >= ? GROUP BY oi.name ORDER BY quantity DESC, total_cents DESC LIMIT 10`
       )
-      .bind(daysAgo(29)),
-    db.prepare("SELECT COUNT(*) AS n FROM orders WHERE status = 'cancelled' AND cancelled_by != 'payment' AND service_day = ?").bind(clock.date),
+      .bind(daysAgo(29), since),
+    db.prepare("SELECT COUNT(*) AS n FROM orders WHERE status = 'cancelled' AND cancelled_by != 'payment' AND service_day = ? AND created_at >= ?").bind(clock.date, since),
   ]);
   const today = days.results.find((d) => d.day === clock.date) || { day: clock.date, orders: 0, total_cents: 0, online_cents: 0 };
   return {
@@ -877,6 +887,9 @@ async function handleApi(request, env, url, ctx) {
       ordering_paused: Boolean(settings.ordering_paused),
       payment_test: sentooEnabled(env) && sentooMode(env) === 'sandbox',
       prep_minutes: settings.prep_minutes,
+      prep_base: settings.prep_base,
+      busy: settings.busy,
+      busy_extra: BUSY_EXTRA_MINUTES,
       availability: availability(settings, Date.now()),
       server_time: now(),
     });
@@ -906,6 +919,18 @@ async function handleApi(request, env, url, ctx) {
       .bind('prep_minutes', JSON.stringify(minutes))
       .run();
     return json({ ok: true, prep_minutes: minutes });
+  }
+  // One-day switches: "busy" (longer wait) and "closed today". Both end by themselves at midnight.
+  if ((match = path.match(/^\/api\/staff\/(busy|closed)$/)) && method === 'POST') {
+    await requireRole(request, env, 'staff');
+    const on = Boolean((await readJson(request)).on);
+    const settings = await loadSettings(db);
+    const today = localClock(Date.now(), settings.timezone_offset_minutes).date;
+    await db
+      .prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value')
+      .bind(match[1] === 'busy' ? 'busy_day' : 'closed_day', JSON.stringify(on ? today : ''))
+      .run();
+    return json({ ok: true, on });
   }
   if (path === '/api/staff/pause' && method === 'POST') {
     await requireRole(request, env, 'staff');
@@ -1008,7 +1033,7 @@ async function handleApi(request, env, url, ctx) {
     await requireRole(request, env, 'admin');
     const settings = await loadSettings(db);
     const day = localClock(Date.now(), settings.timezone_offset_minutes).date;
-    const report = await dayReport(db, day);
+    const report = await dayReport(db, day, settings.sales_since || 0);
     const origin = new URL(request.url).origin;
     if (method === 'POST') {
       try {
@@ -1019,6 +1044,15 @@ async function handleApi(request, env, url, ctx) {
     }
     const email = reportEmail(report, settings, origin);
     return json({ day, ready: reportReady(env), subject: email.subject, text: email.text });
+  }
+  // Start counting sales from now: used once after testing, before the real opening.
+  if (path === '/api/admin/sales/reset' && method === 'POST') {
+    await requireRole(request, env, 'admin');
+    await db
+      .prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value')
+      .bind('sales_since', JSON.stringify(now()))
+      .run();
+    return json({ ok: true });
   }
   if (path === '/api/admin/settings' && method === 'PUT') {
     await requireRole(request, env, 'admin');

@@ -48,23 +48,23 @@ export function dueDay(settings, nowMs) {
 }
 
 // The figures for one service day. Cancelled orders and unpaid online orders are not counted.
-export async function dayReport(db, day) {
+export async function dayReport(db, day, since = 0) {
   const [totals, items, cancelled] = await db.batch([
     db
       .prepare(
         `SELECT COUNT(*) AS orders, COALESCE(SUM(total_cents), 0) AS total_cents,
                 COALESCE(SUM(CASE WHEN payment_method = 'sentoo' AND payment_status = 'paid' THEN total_cents ELSE 0 END), 0) AS online_cents
-         FROM orders WHERE ${COUNTED} AND service_day = ?`
+         FROM orders WHERE ${COUNTED} AND service_day = ? AND created_at >= ?`
       )
-      .bind(day),
+      .bind(day, since),
     db
       .prepare(
         `SELECT oi.name AS name, SUM(oi.quantity) AS quantity, SUM(oi.quantity * oi.unit_price_cents) AS total_cents
          FROM order_items oi JOIN orders o ON o.id = oi.order_id
-         WHERE o.${COUNTED} AND o.service_day = ? GROUP BY oi.name ORDER BY quantity DESC, total_cents DESC LIMIT 8`
+         WHERE o.${COUNTED} AND o.service_day = ? AND o.created_at >= ? GROUP BY oi.name ORDER BY quantity DESC, total_cents DESC LIMIT 8`
       )
-      .bind(day),
-    db.prepare("SELECT COUNT(*) AS n FROM orders WHERE status = 'cancelled' AND cancelled_by != 'payment' AND service_day = ?").bind(day),
+      .bind(day, since),
+    db.prepare("SELECT COUNT(*) AS n FROM orders WHERE status = 'cancelled' AND cancelled_by != 'payment' AND service_day = ? AND created_at >= ?").bind(day, since),
   ]);
   const t = totals.results[0];
   return {
@@ -159,7 +159,7 @@ export async function sendDueReport(env, nowMs = Date.now()) {
   if (last && last.value >= day) return null;
   await db.prepare("INSERT INTO secrets (key, value) VALUES ('report_sent_day', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").bind(day).run();
   try {
-    await sendReport(env, settings, await dayReport(db, day), env.SITE_URL || 'https://volcanostreetfood.com');
+    await sendReport(env, settings, await dayReport(db, day, settings.sales_since || 0), env.SITE_URL || 'https://volcanostreetfood.com');
     return day;
   } catch (err) {
     console.error('Day report could not be sent', day, err && err.message);

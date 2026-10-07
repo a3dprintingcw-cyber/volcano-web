@@ -38,7 +38,8 @@ function nextOpening(hours, weekday) {
 // Orders are for today's service only.
 export function availability(settings, nowMs) {
   const clock = localClock(nowMs, settings.timezone_offset_minutes);
-  const today = settings.hours[clock.weekday] || null;
+  // "Closed today" (a holiday, a private event) switches one day off without touching the weekly hours.
+  const today = settings.closed_day === clock.date ? null : settings.hours[clock.weekday] || null;
   const base = {
     service_day: clock.date,
     open_now: false,

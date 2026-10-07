@@ -267,6 +267,15 @@ itemDialog.addEventListener('change', (event) => {
   updateDraft();
 });
 
+// A dish opened from the order sheet returns there, whether it was added or not.
+itemDialog.addEventListener('close', () => {
+  if (!backToCart) return;
+  backToCart = false;
+  form.error = '';
+  renderCart();
+  cartDialog.showModal();
+});
+
 itemDialog.addEventListener('click', (event) => {
   if (event.target === itemDialog || event.target.closest('[data-close]')) return itemDialog.close();
   const step = event.target.closest('[data-qty]');
@@ -350,6 +359,7 @@ function renderCartBar(bump = false) {
 }
 
 const cartDialog = $('cart-dialog');
+let backToCart = false; // the dish sheet was opened from the order sheet
 const form = { error: '', sending: false };
 
 function renderCart() {
@@ -430,6 +440,7 @@ function renderCart() {
     <div class="sheet-scroll">
       ${head}
       <ul class="lines">${lines}</ul>
+      ${extrasRow()}
       <div class="total"><span>${t('cart.total')}</span><span>${money(total)}</span></div>
       ${checkout}
     </div>
@@ -438,6 +449,34 @@ function renderCart() {
         ? `<div class="sheet-foot"><button class="btn btn-primary" type="submit" form="checkout" ${form.sending ? 'disabled' : ''}>${form.sending ? t('cart.placing') : submitLabel(total)}</button></div>`
         : ''
     }`;
+}
+
+// A drink or a side the customer has not picked yet, offered once in the order sheet.
+function extrasRow() {
+  const inCart = new Set(state.cart.map((l) => l.item_id));
+  const offers = state.menu
+    .filter((c) => c.slug === 'beverages' || c.slug === 'sides')
+    .flatMap((c) => c.items)
+    .filter((i) => i.available && !i.alcohol && !inCart.has(i.id) && i.groups.every((g) => g.min === 0 || g.options.some((o) => o.available)));
+  // Drinks first when the order has none, otherwise sides first.
+  const hasDrink = state.menu.some((c) => c.slug === 'beverages' && c.items.some((i) => inCart.has(i.id)));
+  const drinks = (state.menu.find((c) => c.slug === 'beverages') || { items: [] }).items;
+  offers.sort((a, b) => (drinks.includes(a) === drinks.includes(b) ? 0 : drinks.includes(a) === !hasDrink ? -1 : 1));
+  if (offers.length === 0 || !state.availability.can_order) return '';
+  return `<div class="extras">
+    <h3>${t('cart.extras')}</h3>
+    <div class="extras-row">
+      ${offers
+        .slice(0, 8)
+        .map(
+          (i) => `<button class="extra" type="button" data-extra="${i.id}">
+            <span class="extra-name">${esc(i.name)}</span>
+            <span class="extra-price">${i.has_price_range ? `${t('menu.from')} ` : ''}${money(i.from_cents)} <b aria-hidden="true">+</b></span>
+          </button>`
+        )
+        .join('')}
+    </div>
+  </div>`;
 }
 
 // The button says what will happen next: straight to the kitchen, or on to payment first.
@@ -481,6 +520,19 @@ $('cartbar').addEventListener('click', () => {
 
 cartDialog.addEventListener('click', (event) => {
   if (event.target === cartDialog || event.target.closest('[data-close]')) return cartDialog.close();
+  const extra = event.target.closest('[data-extra]');
+  if (extra) {
+    const item = state.items.get(Number(extra.dataset.extra));
+    if (!item) return;
+    if (item.groups.some((g) => g.min > 0)) {
+      // It needs a choice (which soda, which flavor): ask, then come back to the order.
+      backToCart = true;
+      cartDialog.close();
+      return openItem(item.id);
+    }
+    addToCart({ item_id: item.id, option_ids: [], note: '', quantity: 1 });
+    return keepFormValues(renderCart);
+  }
   const button = event.target.closest('[data-line]');
   if (!button) return;
   const index = Number(button.dataset.line);
