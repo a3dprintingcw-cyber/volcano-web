@@ -73,7 +73,7 @@ export function erupt({ number, title }) {
   const origin = onScreen ? { x: box.left + box.width / 2, y: box.top + box.height * 0.34 } : { x: width / 2, y: height + 10 };
 
   const COLORS = ['#ffd35a', '#ffb224', '#ff8a1f', '#f0541e', '#c8351c', '#fff1c2'];
-  const DURATION = 3600;
+  const DURATION = 4800;
   const particles = [];
   const burst = (count, power) => {
     for (let i = 0; i < count; i += 1) {
@@ -91,6 +91,51 @@ export function erupt({ number, title }) {
       });
     }
   };
+  // What goes up comes down: lava drips from the top of the screen, like the drip in the site's header.
+  const drips = [];
+  for (let x = -6; x < width + 10; ) {
+    const w = 16 + Math.random() * 26;
+    drips.push({
+      x,
+      w,
+      target: height * (0.12 + Math.random() * Math.random() * 0.8),
+      speed: 2.2 + Math.random() * 4.2,
+      delay: 700 + Math.random() * 900,
+      len: 0,
+    });
+    x += w + 6 + Math.random() * 16;
+  }
+  const lava = ctx.createLinearGradient(0, 0, 0, height);
+  lava.addColorStop(0, '#a43b25');
+  lava.addColorStop(0.55, '#c8351c');
+  lava.addColorStop(1, '#ff8a1f');
+  const drawDrips = (elapsed, step) => {
+    let band = 0;
+    ctx.fillStyle = lava;
+    for (const d of drips) {
+      if (elapsed < d.delay) continue;
+      // Fast at first, slowing down as the drip gets heavy and long.
+      d.len += Math.max(0.25, d.speed * (1 - d.len / d.target)) * step;
+      band = Math.max(band, Math.min(18, (elapsed - d.delay) / 30));
+      const r = d.w / 2;
+      ctx.beginPath();
+      ctx.moveTo(d.x, -2);
+      ctx.lineTo(d.x, d.len);
+      ctx.arc(d.x + r, d.len, r, Math.PI, 0, true);
+      ctx.lineTo(d.x + d.w, -2);
+      ctx.fill();
+      // A bright bead at the tip.
+      ctx.globalAlpha = 0.55;
+      ctx.fillStyle = '#ffd35a';
+      ctx.beginPath();
+      ctx.arc(d.x + r, d.len + r * 0.25, r * 0.38, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = lava;
+    }
+    if (band > 0) ctx.fillRect(0, 0, width, band);
+  };
+
   const reach = Math.max(11, Math.sqrt(Math.max(origin.y, 200)) * 0.85);
   burst(110, reach);
 
@@ -106,6 +151,7 @@ export function erupt({ number, title }) {
       nextBurst += 300;
     }
     ctx.clearRect(0, 0, width, height);
+    drawDrips(elapsed, step);
     for (const p of particles) {
       p.vy += 0.34 * step;
       p.vx *= 0.995;

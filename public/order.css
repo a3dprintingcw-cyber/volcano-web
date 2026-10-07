@@ -113,12 +113,12 @@
 }
 
 /* The full-screen eruption when the food is ready. */
-.eruption { position: fixed; inset: 0; z-index: 60; pointer-events: none; animation: eruption-flash 3.6s ease-out forwards; }
+.eruption { position: fixed; inset: 0; z-index: 60; pointer-events: none; animation: eruption-flash 4.8s ease-out forwards; }
 .eruption canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
 .eruption-words {
   position: absolute; left: 50%; top: 42%; transform: translate(-50%, -50%); text-align: center; white-space: nowrap;
   color: var(--ash); font-family: var(--display); text-transform: uppercase; text-shadow: 0 4px 0 var(--lava-deep), 0 10px 40px rgba(0, 0, 0, 0.7);
-  animation: eruption-words 3.6s cubic-bezier(0.2, 1.4, 0.4, 1) forwards;
+  animation: eruption-words 4.8s cubic-bezier(0.2, 1.4, 0.4, 1) forwards;
 }
 .eruption-words strong { display: block; font-weight: 400; font-size: clamp(5rem, 30vw, 11rem); line-height: 0.95; color: var(--magma); }
 .eruption-words span { display: block; font-size: clamp(1.3rem, 6.5vw, 2.4rem); margin-top: 0.5rem; }
