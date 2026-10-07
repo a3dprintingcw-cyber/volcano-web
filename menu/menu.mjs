@@ -80,8 +80,8 @@ export const menu = [
     items: [
       { name: 'Double Stacker', price: 30, image: 'burger', desc: 'Two patty, double cheese, bacon, caramelized onion & volcano sauce' },
       { name: 'Single Slam Burger', price: 28, desc: 'One patty, double cheese, bacon, caramelized onion & volcano sauce' },
-      { name: "Mac 'N Cheese Burger", price: 28, desc: 'Mac & cheese, one patty, tomato, lettuce & burger sauce' },
-      { name: 'BLTC Smashed Burger', price: 28, desc: 'Caramelized onions, one patty, bacon, tomato, lettuce & burger sauce' },
+      { name: "Mac 'N Cheese Burger", price: 28, desc: 'Mac & cheese, one patty, tomato, lettuce & volcano sauce' },
+      { name: 'BLTC Smashed Burger', price: 28, desc: 'Caramelized onions, one patty, bacon, tomato, lettuce & volcano sauce' },
       { name: 'Crispy Chicken Burger', price: 28, desc: 'Crispy chicken, cole slaw, pickles & lava sauce' },
     ],
   },
@@ -203,8 +203,8 @@ export const menu = [
       { name: 'Soda', price: 5, groups: [one('Choice', ['Cola', 'Cola Zero', 'Fria', 'Sprite', 'Royal Club Ginger Ale'])] },
       { name: 'Fresh Juice', price: 6, groups: [one('Flavor', ['Lemon', 'Punch', 'Kiwi punch', 'Passion fruit'])] },
       { name: 'Beer & Smirnoff', price: 7, alcohol: true, groups: [one('Choice', ['Amstel Bright', 'Heineken', 'Smirnoff'])] },
-      { name: 'Cocktail', price: 18, alcohol: true, image: 'cocktail', groups: [one('Choice', ['El Volcanico', 'Eruption', 'Explosion'])] },
-      { name: 'Frozen', price: 20, image: 'frozen', groups: [one('Alcohol', [{ name: 'Add alcohol', price: 5, alcohol: true }], { required: false })] },
+      { name: 'Cocktail', price: 18, alcohol: true, image: 'frozen', groups: [one('Choice', ['El Volcanico', 'Eruption', 'Explosion'])] },
+      { name: 'Frozen', price: 20, image: 'cocktail', groups: [one('Alcohol', [{ name: 'Add alcohol', price: 5, alcohol: true }], { required: false })] },
     ],
   },
 ];
@@ -214,8 +214,8 @@ export const menu = [
 export const REMOVABLE = {
   'Double Stacker': ['Cheese', 'Bacon', 'Caramelized onion', 'Volcano sauce'],
   'Single Slam Burger': ['Cheese', 'Bacon', 'Caramelized onion', 'Volcano sauce'],
-  "Mac 'N Cheese Burger": ['Tomato', 'Lettuce', 'Burger sauce'],
-  'BLTC Smashed Burger': ['Caramelized onions', 'Bacon', 'Tomato', 'Lettuce', 'Burger sauce'],
+  "Mac 'N Cheese Burger": ['Tomato', 'Lettuce', 'Volcano sauce'],
+  'BLTC Smashed Burger': ['Caramelized onions', 'Bacon', 'Tomato', 'Lettuce', 'Volcano sauce'],
   'Crispy Chicken Burger': ['Cole slaw', 'Pickles', 'Lava sauce'],
   'Philly Cheese Steak Loaded': ['Cheese', 'Onions', 'Paprika', 'Volcano sauce'],
   'Shrimps Loaded': ['Bacon', 'Cheese', 'Volcano sauce'],
