@@ -7,7 +7,7 @@
   "assets": {
     "directory": "./public",
     "binding": "ASSETS",
-    "run_worker_first": ["/api/*"]
+    "run_worker_first": ["/api/*", "/", "/index.html", "/order", "/order.html"]
   },
   // The database (D1, named "volcano" in the Cloudflare account).
   "d1_databases": [
@@ -21,7 +21,9 @@
   // Sentoo online payment. "sandbox" uses Sentoo's test system: no real money moves.
   // Change to "production" only after Sentoo has approved the integration.
   // SENTOO_MERCHANT_ID and SENTOO_SECRET are set as Secrets in the Cloudflare dashboard.
-  "vars": { "SENTOO_ENV": "sandbox" },
+  // LAUNCH_AT: until this moment customers see "Coming soon" and cannot order.
+  // Signed in staff and managers still see the real site. Leave empty to open.
+  "vars": { "SENTOO_ENV": "sandbox", "LAUNCH_AT": "2026-11-03T00:00:00-04:00" },
   // Every 10 minutes: close online payments that were started and then abandoned.
   "triggers": { "crons": ["*/10 * * * *"] },
   "observability": { "enabled": true }

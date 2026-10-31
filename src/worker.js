@@ -797,7 +797,12 @@ async function handleApi(request, env, url, ctx) {
       },
     });
   }
-  if (path === '/api/orders' && method === 'POST') return createOrder(request, env);
+  if (path === '/api/orders' && method === 'POST') {
+    if (beforeLaunch(env) && !(await sessionRole(request, env))) {
+      throw new HttpError(403, 'Online ordering opens on Tuesday 3 November. Please call us to order.');
+    }
+    return createOrder(request, env);
+  }
   if ((match = path.match(/^\/api\/orders\/([0-9a-f-]{36})$/)) && method === 'GET') {
     const [order] = await loadOrders(db, 'id = ?', [match[1]]);
     if (!order) throw new HttpError(404, 'We could not find that order.');
@@ -1073,10 +1078,30 @@ async function handleApi(request, env, url, ctx) {
   throw new HttpError(404, 'Not found.');
 }
 
+// Before the launch moment (LAUNCH_AT in wrangler.jsonc), customers see the
+// "Coming soon" page and cannot order. Staff and managers who are signed in on
+// the kitchen or admin page see the real site, so they can try it out.
+const CUSTOMER_PAGES = new Set(['/', '/index.html', '/order', '/order.html']);
+const beforeLaunch = (env) => {
+  const at = Date.parse(env.LAUNCH_AT || '');
+  return Number.isFinite(at) && Date.now() < at;
+};
+async function comingSoon(request, env) {
+  const page = await env.ASSETS.fetch(new Request(new URL('/soon', request.url), request));
+  const response = new Response(page.body, page);
+  response.headers.set('cache-control', 'no-store');
+  return response;
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
-    if (!url.pathname.startsWith('/api/')) return env.ASSETS.fetch(request);
+    if (!url.pathname.startsWith('/api/')) {
+      if (CUSTOMER_PAGES.has(url.pathname) && beforeLaunch(env) && !(await sessionRole(request, env))) {
+        return comingSoon(request, env);
+      }
+      return env.ASSETS.fetch(request);
+    }
     try {
       return await handleApi(request, env, url, ctx);
     } catch (err) {
