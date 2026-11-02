@@ -9,6 +9,8 @@
 # Photos and fonts rarely change, so phones may keep them for a day.
 /img/*
   Cache-Control: public, max-age=86400
+/sushi/img/*
+  Cache-Control: public, max-age=86400
 /fonts/*
   Cache-Control: public, max-age=2592000, immutable
 

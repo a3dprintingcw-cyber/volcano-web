@@ -1,0 +1,36 @@
+/* Volcano Experience sushi menu (reached by QR code). The menu pages are images. */
+@font-face { font-family: 'Barlow'; src: url('/fonts/barlow-latin-600-normal.woff2') format('woff2'); font-weight: 600; font-display: swap; }
+
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; scroll-padding-top: 3.5rem; }
+body { margin: 0; background: #000; color: #fff3dd; font: 600 0.95rem/1.4 'Barlow', system-ui, -apple-system, 'Segoe UI', sans-serif; }
+img { display: block; width: 100%; height: auto; }
+
+.sushi-nav {
+  position: sticky; top: 0; z-index: 1;
+  display: flex; gap: 0.5rem; overflow-x: auto; scrollbar-width: none;
+  padding: 0.6rem 1rem calc(0.6rem);
+  padding-top: max(0.6rem, env(safe-area-inset-top));
+  background: rgba(0, 0, 0, 0.88);
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  border-bottom: 1px solid #3a3431;
+}
+.sushi-nav::-webkit-scrollbar { display: none; }
+.sushi-nav a {
+  flex: none; padding: 0.45rem 0.9rem; border-radius: 999px;
+  border: 1px solid #fdb429; color: #fdb429; text-decoration: none; white-space: nowrap;
+}
+.sushi-nav a:active, .sushi-nav a:focus-visible { background: #fdb429; color: #1b1512; outline: none; }
+
+.sushi-pages { max-width: 600px; margin: 0 auto; }
+.sushi-pages section + section { margin-top: 0; }
+
+.sushi-foot { max-width: 600px; margin: 0 auto; padding: 1.25rem 1rem 2rem; text-align: center; color: #c2b2a0; }
+.sushi-foot p { margin: 0.25rem 0; }
+
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+@media (min-width: 640px) {
+  .sushi-nav { justify-content: center; }
+  .sushi-pages img { margin: 1rem 0; border-radius: 6px; }
+}
