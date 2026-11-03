@@ -1,0 +1,14 @@
+html, body { margin: 0; height: 100%; background: #000; overflow: hidden; cursor: none; }
+.board { position: fixed; inset: 0; transform-origin: center center; }
+/* A vertical TV that the browser still treats as landscape: turn the whole board. */
+.board.rot90, .board.rot270 { width: 100vh; height: 100vw; left: calc((100vw - 100vh) / 2); top: calc((100vh - 100vw) / 2); }
+.board.rot90 { transform: rotate(90deg); }
+.board.rot270 { transform: rotate(-90deg); }
+
+.slide {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center; gap: 0;
+  opacity: 0; transition: opacity 0.9s ease;
+}
+.slide.on { opacity: 1; }
+.slide img { height: 100%; width: auto; max-width: calc(100% / var(--count, 1)); object-fit: contain; display: block; }
