@@ -23,7 +23,7 @@
   // SENTOO_MERCHANT_ID and SENTOO_SECRET are set as Secrets in the Cloudflare dashboard.
   // LAUNCH_AT: until this moment customers see "Coming soon" and cannot order.
   // Signed in staff and managers still see the real site. Leave empty to open.
-  "vars": { "SENTOO_ENV": "sandbox", "LAUNCH_AT": "2026-11-03T00:00:00-04:00" },
+  "vars": { "SENTOO_ENV": "sandbox", "LAUNCH_AT": "" },
   // Every 10 minutes: close online payments that were started and then abandoned.
   "triggers": { "crons": ["*/10 * * * *"] },
   "observability": { "enabled": true }
