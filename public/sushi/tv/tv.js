@@ -5,11 +5,12 @@
   const rotate = params.get('rotate');
   const seconds = Math.max(5, Number(params.get('seconds')) || (portrait ? 12 : 20));
 
-  const page = (name) => `/sushi/img/${name}-1350.webp`;
+  const page = (name) => (name === 'full-menu' ? '/sushi/img/full-menu.webp' : `/sushi/img/${name}-1350.webp`);
   const pages = ['appetizer-1', 'appetizer-2', 'famous-rolls', 'signature-rolls', 'tempura-fried-rolls'];
   // Landscape: three pages fill a 16:9 screen, so show two sets of three.
+  // Vertical TV: the whole menu on one picture. Add &cycle=1 to show the pages one by one instead.
   const slides = portrait
-    ? pages.map((p) => [p])
+    ? (params.get('cycle') ? pages.map((p) => [p]) : [['full-menu']])
     : [['appetizer-1', 'appetizer-2', 'famous-rolls'], ['famous-rolls', 'signature-rolls', 'tempura-fried-rolls']];
 
   const board = document.getElementById('board');
