@@ -53,7 +53,9 @@ export async function dayReport(db, day, since = 0) {
     db
       .prepare(
         `SELECT COUNT(*) AS orders, COALESCE(SUM(total_cents), 0) AS total_cents,
-                COALESCE(SUM(CASE WHEN payment_method = 'sentoo' AND payment_status = 'paid' THEN total_cents ELSE 0 END), 0) AS online_cents
+                COALESCE(SUM(CASE WHEN payment_method = 'sentoo' AND payment_status = 'paid' THEN total_cents ELSE 0 END), 0) AS online_cents,
+                COALESCE(SUM(CASE WHEN payment_method = 'cash' THEN total_cents ELSE 0 END), 0) AS cash_cents,
+                COALESCE(SUM(CASE WHEN payment_method = 'card' THEN total_cents ELSE 0 END), 0) AS card_cents
          FROM orders WHERE ${COUNTED} AND service_day = ? AND created_at >= ?`
       )
       .bind(day, since),
@@ -73,6 +75,8 @@ export async function dayReport(db, day, since = 0) {
     total_cents: t.total_cents,
     online_cents: t.online_cents,
     pickup_cents: t.total_cents - t.online_cents,
+    cash_cents: t.cash_cents || 0,
+    card_cents: t.card_cents || 0,
     average_cents: t.orders ? Math.round(t.total_cents / t.orders) : 0,
     cancelled: cancelled.results[0].n,
     items: items.results,
@@ -90,7 +94,11 @@ export function reportEmail(report, settings, siteUrl) {
     ['Orders', String(report.orders)],
     ['Average order', money(report.average_cents)],
     ['Paid online', money(report.online_cents)],
-    ['To pay at pickup', money(report.pickup_cents)],
+    ['Cash at pickup', money(report.cash_cents || 0)],
+    ['Card at pickup', money(report.card_cents || 0)],
+    ...(report.pickup_cents - (report.cash_cents || 0) - (report.card_cents || 0) > 0
+      ? [['At pickup, cash or card not recorded', money(report.pickup_cents - (report.cash_cents || 0) - (report.card_cents || 0))]]
+      : []),
     ['Cancelled orders', String(report.cancelled)],
   ];
   const intro = report.orders

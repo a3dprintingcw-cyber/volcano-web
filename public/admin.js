@@ -211,14 +211,16 @@ function salesPanel() {
         <div class="stat"><span class="stat-value">${money(t.total_cents || 0)}</span><span class="stat-label">Today</span></div>
         <div class="stat"><span class="stat-value">${t.orders}</span><span class="stat-label">Orders today</span></div>
         <div class="stat"><span class="stat-value">${money(t.average_cents)}</span><span class="stat-label">Average order</span></div>
+        <div class="stat"><span class="stat-value">${money(t.cash_cents || 0)}</span><span class="stat-label">Cash today</span></div>
+        <div class="stat"><span class="stat-value">${money(t.card_cents || 0)}</span><span class="stat-label">Card today</span></div>
         <div class="stat"><span class="stat-value">${money(t.online_cents || 0)}</span><span class="stat-label">Paid online today</span></div>
         <div class="stat"><span class="stat-value">${t.cancelled}</span><span class="stat-label">Cancelled today</span></div>
       </div>
       <h3>Last 7 days</h3>
       ${
         sales.days.length
-          ? `<table class="sales-table"><thead><tr><th>Day</th><th class="num">Orders</th><th class="num">Sales</th><th class="num">Paid online</th></tr></thead><tbody>
-              ${sales.days.map((d) => `<tr><td>${esc(dayName(d.day))}</td><td class="num">${d.orders}</td><td class="num">${money(d.total_cents)}</td><td class="num">${money(d.online_cents || 0)}</td></tr>`).join('')}
+          ? `<table class="sales-table"><thead><tr><th>Day</th><th class="num">Orders</th><th class="num">Sales</th><th class="num">Cash</th><th class="num">Card</th><th class="num">Paid online</th></tr></thead><tbody>
+              ${sales.days.map((d) => `<tr><td>${esc(dayName(d.day))}</td><td class="num">${d.orders}</td><td class="num">${money(d.total_cents)}</td><td class="num">${money(d.cash_cents || 0)}</td><td class="num">${money(d.card_cents || 0)}</td><td class="num">${money(d.online_cents || 0)}</td></tr>`).join('')}
             </tbody></table>`
           : '<p>No orders in the last 7 days yet.</p>'
       }

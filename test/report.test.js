@@ -29,15 +29,23 @@ test('nothing is due for a closed day', () => {
 });
 
 test('the email states the figures', () => {
-  const report = { day: '2026-10-06', orders: 3, total_cents: 9600, online_cents: 3000, pickup_cents: 6600, average_cents: 3200, cancelled: 1, items: [{ name: 'Double Stacker', quantity: 2, total_cents: 6000 }] };
+  const report = { day: '2026-10-06', orders: 3, total_cents: 9600, online_cents: 3000, pickup_cents: 6600, cash_cents: 4000, card_cents: 2600, average_cents: 3200, cancelled: 1, items: [{ name: 'Double Stacker', quantity: 2, total_cents: 6000 }] };
   const email = reportEmail(report, settings, 'https://volcanostreetfood.com');
   assert.equal(email.subject, 'Volcano Street Food: XCG 96 from 3 orders on Tuesday 6 October');
   assert.match(email.text, /Sales: XCG 96\n/);
-  assert.match(email.text, /To pay at pickup: XCG 66/);
+  assert.match(email.text, /Cash at pickup: XCG 40\n/);
+  assert.match(email.text, /Card at pickup: XCG 26\n/);
+  assert.ok(!/not recorded/.test(email.text), 'no leftover row when every pickup order has a method');
   assert.match(email.text, /2 x Double Stacker \(XCG 60\)/);
   assert.match(email.html, /Double Stacker/);
   assert.equal(longDate('2026-10-06'), 'Tuesday 6 October');
   assert.ok(!/[—–]/.test(email.text + email.subject), 'no dashes in the copy');
+});
+
+test('older pay-at-pickup orders without cash or card get their own row', () => {
+  const report = { day: '2026-10-06', orders: 2, total_cents: 5000, online_cents: 0, pickup_cents: 5000, cash_cents: 2000, card_cents: 0, average_cents: 2500, cancelled: 0, items: [] };
+  const email = reportEmail(report, settings, 'https://volcanostreetfood.com');
+  assert.match(email.text, /At pickup, cash or card not recorded: XCG 30/);
 });
 
 // A tiny stand-in for the database: just enough for sendDueReport.

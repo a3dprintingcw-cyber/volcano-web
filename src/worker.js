@@ -301,6 +301,8 @@ async function createOrder(request, env) {
   if (digits.length < 7 || digits.length > 15) throw new HttpError(400, 'Please enter a phone number we can reach you on.');
   const notes = cleanText(body.notes, LIMITS.notes);
   const payOnline = body.payment === 'sentoo';
+  // Paying at pickup: the customer says whether it will be cash or card.
+  const pickupMethod = ['cash', 'card'].includes(body.payment) ? body.payment : 'pickup';
   if (payOnline && !sentooEnabled(env)) {
     throw new HttpError(400, 'Online payment is not available right now. Please choose to pay at pickup.');
   }
@@ -363,7 +365,7 @@ async function createOrder(request, env) {
             pickupType,
             pickupAt,
             total,
-            payOnline ? 'sentoo' : 'pickup',
+            payOnline ? 'sentoo' : pickupMethod,
             created,
             created
           ),
@@ -567,7 +569,9 @@ async function salesSummary(db, settings) {
     db
       .prepare(
         `SELECT service_day AS day, COUNT(*) AS orders, SUM(total_cents) AS total_cents,
-                SUM(CASE WHEN payment_method = 'sentoo' AND payment_status = 'paid' THEN total_cents ELSE 0 END) AS online_cents
+                SUM(CASE WHEN payment_method = 'sentoo' AND payment_status = 'paid' THEN total_cents ELSE 0 END) AS online_cents,
+                SUM(CASE WHEN payment_method = 'cash' THEN total_cents ELSE 0 END) AS cash_cents,
+                SUM(CASE WHEN payment_method = 'card' THEN total_cents ELSE 0 END) AS card_cents
          FROM orders WHERE ${counted} AND service_day >= ? AND created_at >= ? GROUP BY service_day ORDER BY service_day DESC`
       )
       .bind(daysAgo(6), since),
@@ -580,7 +584,7 @@ async function salesSummary(db, settings) {
       .bind(daysAgo(29), since),
     db.prepare("SELECT COUNT(*) AS n FROM orders WHERE status = 'cancelled' AND cancelled_by != 'payment' AND service_day = ? AND created_at >= ?").bind(clock.date, since),
   ]);
-  const today = days.results.find((d) => d.day === clock.date) || { day: clock.date, orders: 0, total_cents: 0, online_cents: 0 };
+  const today = days.results.find((d) => d.day === clock.date) || { day: clock.date, orders: 0, total_cents: 0, online_cents: 0, cash_cents: 0, card_cents: 0 };
   return {
     today: { ...today, cancelled: cancelled.results[0].n, average_cents: today.orders ? Math.round(today.total_cents / today.orders) : 0 },
     days: days.results,
@@ -909,6 +913,16 @@ async function handleApi(request, env, url, ctx) {
       changes.cancelled_by = body.status === 'cancelled' ? 'staff' : '';
     }
     if ('paid' in body) changes.payment_status = body.paid ? 'paid' : 'unpaid';
+    // Staff can switch a pay-at-pickup order between cash and card. Online payments stay as they are.
+    if ('payment_method' in body) {
+      if (!['cash', 'card'].includes(body.payment_method)) throw new HttpError(400, 'Choose cash or card.');
+      const result = await db
+        .prepare("UPDATE orders SET payment_method = ?, updated_at = ? WHERE id = ? AND payment_method != 'sentoo'")
+        .bind(body.payment_method, changes.updated_at, match[1])
+        .run();
+      if (!result.meta.changes) throw new HttpError(409, 'This order was paid online.');
+      if (Object.keys(changes).length === 1) return json({ ok: true });
+    }
     await updateRow(db, 'orders', match[1], changes);
     // Tell the customer's phone. This runs after the kitchen's tap has been answered.
     if (changes.status === 'ready' || changes.status === 'cancelled') ctx.waitUntil(notifyOrder(env, match[1]));

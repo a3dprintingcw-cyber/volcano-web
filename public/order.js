@@ -193,7 +193,11 @@ function render({ order, info }) {
       ? `${order.payment_method === 'sentoo' ? t('order.paid_online') : t('order.paid')}${info.payment_test && order.payment_method === 'sentoo' ? ` ${t('order.paid_test')}` : ''}`
       : awaiting
         ? t('order.not_paid')
-        : t('cart.pay_note');
+        : order.payment_method === 'cash'
+          ? t('order.pay_cash')
+          : order.payment_method === 'card'
+            ? t('order.pay_card')
+            : t('cart.pay_note');
   const tel = `tel:${info.phone.replace(/[^\d+]/g, '')}`;
   document.getElementById('phone-link').href = tel;
   document.getElementById('phone-link').textContent = info.phone;

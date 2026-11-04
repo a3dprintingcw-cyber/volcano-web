@@ -47,6 +47,7 @@
 .tag { border: 2px solid var(--ink); background: transparent; color: var(--ink); border-radius: 999px; padding: 0.3rem 0.8rem; font-weight: 700; min-height: 2.4rem; }
 .tag { display: inline-flex; align-items: center; }
 .tag.is-paid { background: #2f6b3a; border-color: #2f6b3a; color: #fff; }
+.tag-method { background: #ffe4a8; border-color: #b8860b; color: var(--ink); }
 .card .link { color: var(--lava-deep); }
 .card-foot-links { padding-top: 0; gap: 0.3rem 1rem; }
 .card-foot-links .link-end { margin-left: auto; }

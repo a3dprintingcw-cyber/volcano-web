@@ -427,10 +427,15 @@ function renderCart() {
             ? `<fieldset class="group pay-choice">
                 <legend>${t('cart.payment')}</legend>
                 <label class="choice"><input type="radio" name="payment" value="sentoo" checked> <span>${t('cart.pay_online')}<br><small>${t('cart.pay_online_hint')}</small></span></label>
-                <label class="choice"><input type="radio" name="payment" value="pickup"> <span>${t('cart.pay_pickup')}</span></label>
+                <label class="choice"><input type="radio" name="payment" value="cash"> <span>${t('cart.pay_cash_pickup')}</span></label>
+                <label class="choice"><input type="radio" name="payment" value="card"> <span>${t('cart.pay_card_pickup')}</span></label>
               </fieldset>
               ${state.info.payment_test ? `<p class="pay-note">${t('cart.pay_test')}</p>` : ''}`
-            : `<p class="pay-note">${t('cart.pay_note')}</p>`
+            : `<fieldset class="group pay-choice">
+                <legend>${t('cart.pay_how')}</legend>
+                <label class="choice"><input type="radio" name="payment" value="cash"> <span>${t('cart.pay_cash')}</span></label>
+                <label class="choice"><input type="radio" name="payment" value="card"> <span>${t('cart.pay_card')}</span></label>
+              </fieldset>`
         }
         ${form.error ? `<p class="error" role="alert">${esc(form.error)}</p>` : ''}
       </form>`;
@@ -571,6 +576,8 @@ cartDialog.addEventListener('submit', async (event) => {
   if (name.length < 2) return fail(t('cart.err_name'), 'name');
   if (phone.replace(/\D/g, '').length < 7) return fail(t('cart.err_phone'), 'phone');
   if (alcohol && !data.get('age')) return fail(t('cart.err_age'), 'age');
+  const payment = ['sentoo', 'cash', 'card'].includes(data.get('payment')) ? data.get('payment') : null;
+  if (!payment) return fail(t('cart.err_pay'), 'payment');
 
   store.set(CUSTOMER_KEY, { name, phone });
   form.sending = true;
@@ -586,7 +593,7 @@ cartDialog.addEventListener('submit', async (event) => {
         notes: String(data.get('notes') || ''),
         pickup: pickup === 'asap' ? 'asap' : Number(pickup),
         age_confirmed: Boolean(data.get('age')),
-        payment: data.get('payment') === 'sentoo' ? 'sentoo' : 'pickup',
+        payment,
         items: state.cart,
       },
     });

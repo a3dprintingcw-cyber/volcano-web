@@ -109,6 +109,11 @@ function card(order, column, serverTime) {
             ? `<span class="tag is-paid">Paid online${state.data.payment_test ? ' (test)' : ''}</span>`
             : `<button class="tag ${paid ? 'is-paid' : ''}" type="button" data-paid="${paid ? '0' : '1'}" aria-pressed="${paid}">${paid ? 'Paid' : 'Not paid'}</button>`
         }
+        ${
+          order.payment_method === 'cash' || order.payment_method === 'card'
+            ? `<button class="tag tag-method" type="button" data-method="${order.payment_method === 'cash' ? 'card' : 'cash'}" title="Tap to switch cash or card">${order.payment_method === 'cash' ? 'Cash' : 'Card'}</button>`
+            : ''
+        }
         <button class="btn btn-primary" type="button" data-status="${column.next}">${column.action}</button>
       </div>
       <div class="card-foot card-foot-links">
@@ -172,7 +177,7 @@ function render() {
                 (o) => `<tr data-id="${o.id}"><td>${o.number}</td><td>${esc(o.customer_name)}</td>
                 <td>${
                   o.status === 'done'
-                    ? `Picked up${o.payment_status === 'paid' ? (o.payment_method === 'sentoo' ? ', paid online' : ', paid') : ', not marked paid'}`
+                    ? `Picked up${o.payment_status === 'paid' ? (o.payment_method === 'sentoo' ? ', paid online' : o.payment_method === 'cash' ? ', paid cash' : o.payment_method === 'card' ? ', paid card' : ', paid') : ', not marked paid'}`
                     : o.payment_method === 'sentoo' && o.payment_status === 'paid'
                       ? 'Cancelled. Paid online: refund it in the Sentoo portal'
                       : o.cancelled_by === 'customer'
@@ -273,6 +278,9 @@ app.addEventListener('click', (event) => {
     }
     state.confirmCancel = null;
     return act(() => api(`/api/staff/orders/${id}`, { method: 'PATCH', body: { status: 'cancelled' } }));
+  }
+  if (target.dataset.method) {
+    return act(() => api(`/api/staff/orders/${id}`, { method: 'PATCH', body: { payment_method: target.dataset.method } }));
   }
   if ('paid' in target.dataset) {
     return act(() => api(`/api/staff/orders/${id}`, { method: 'PATCH', body: { paid: target.dataset.paid === '1' } }));
