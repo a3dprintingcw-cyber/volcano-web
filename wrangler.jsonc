@@ -7,7 +7,7 @@
   "assets": {
     "directory": "./public",
     "binding": "ASSETS",
-    "run_worker_first": ["/api/*", "/", "/index.html", "/order", "/order.html"]
+    "run_worker_first": ["/api/*", "/", "/index.html", "/order", "/order.html", "/.well-known/assetlinks.json"]
   },
   // The database (D1, named "volcano" in the Cloudflare account).
   "d1_databases": [
