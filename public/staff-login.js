@@ -28,14 +28,14 @@ export async function requireStaff(app, { title, needAdmin = false }) {
         event.preventDefault();
         try {
           const result = await api('/api/staff/login', { method: 'POST', body: { pin: event.target.pin.value } });
-          if (needAdmin && result.role !== 'admin') return draw('That is the staff PIN. This page needs the manager PIN.');
+          if (needAdmin && result.role !== 'admin') return draw('That PIN is not right.');
           resolve(result.role);
         } catch (err) {
           draw(err.message);
         }
       });
     };
-    draw(session.role && needAdmin ? 'This page needs the manager PIN.' : '');
+    draw('');
   });
 }
 
