@@ -38,7 +38,10 @@
       <p class="hero-sub" data-t="hero.sub">Order here, pick it up hot.</p>
       <p class="hero-hours" id="hero-hours" data-t="hero.hours">Tuesday to Sunday, 6 PM to 12 AM</p>
       <p class="hero-wait" id="hero-wait" hidden></p>
-      <a class="btn btn-primary" href="#cats" data-t="hero.cta">See the menu</a>
+      <div class="hero-actions">
+        <a class="btn btn-primary" href="#cats" data-t="hero.cta">See the menu</a>
+        <button class="btn btn-erupt" type="button" id="erupt-pick"><span aria-hidden="true">🌋</span> <span data-t="pick.button">Erupt for a meal</span></button>
+      </div>
     </div>
     <picture class="hero-photo">
       <source media="(min-width: 700px)" srcset="/img/spread-900.webp">
@@ -93,6 +96,7 @@
 
   <dialog class="sheet" id="item-dialog" aria-labelledby="item-title"></dialog>
   <dialog class="sheet sheet-cart" id="cart-dialog" aria-labelledby="cart-title"></dialog>
+  <dialog class="sheet sheet-pick" id="pick-dialog" aria-labelledby="pick-title"></dialog>
 
   <script type="module" src="/app.js"></script>
 </body>

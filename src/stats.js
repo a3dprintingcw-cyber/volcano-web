@@ -8,7 +8,7 @@
 import { localClock } from './hours.js';
 
 const COUNTED = "status IN ('new','preparing','ready','done')";
-const KINDS = new Set(['view', 'dish', 'cart']);
+const KINDS = new Set(['view', 'dish', 'cart', 'pick']); // 'pick': "Erupt for a meal" was used
 const KEEP_DAYS = 400;
 
 // ---------- small helpers (exported for tests) ----------

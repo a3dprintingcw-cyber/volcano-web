@@ -729,6 +729,146 @@ window.addEventListener('pageshow', (event) => {
   }
 });
 
+// ---------- "Erupt for a meal": the volcano picks a dish ----------
+
+const pickDialog = $('pick-dialog');
+const pickButton = $('erupt-pick');
+const calm = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+let lastPick = null;
+let picking = false;
+
+// A meal for one: not a side, a drink or a platter for the table. Dishes with a photo come up a little more often.
+function pickDish() {
+  const pool = state.menu
+    .filter((c) => !['popular', 'sides', 'beverages', 'mix-platters'].includes(c.slug))
+    .flatMap((c) => c.items)
+    .filter((i) => i.available && i.id !== lastPick);
+  const weighted = pool.flatMap((i) => (i.photo ? [i, i] : [i]));
+  if (!weighted.length) return null;
+  const item = weighted[Math.floor(Math.random() * weighted.length)];
+  lastPick = item.id;
+  return item;
+}
+
+// Lava bursts up from the button and rains back down, about a second and a half.
+function lavaBurst(origin) {
+  const layer = document.createElement('canvas');
+  layer.className = 'lava-burst';
+  layer.setAttribute('aria-hidden', 'true');
+  document.body.append(layer);
+  const ratio = Math.min(window.devicePixelRatio || 1, 2);
+  const width = window.innerWidth;
+  const height = window.innerHeight;
+  layer.width = width * ratio;
+  layer.height = height * ratio;
+  const ctx = layer.getContext('2d');
+  ctx.scale(ratio, ratio);
+  const COLORS = ['#ffd35a', '#ffb224', '#ff8a1f', '#f0541e', '#c8351c', '#fff1c2'];
+  const power = Math.max(12, Math.sqrt(Math.max(origin.y, 200)) * 0.9);
+  const bits = Array.from({ length: 130 }, () => {
+    const angle = -Math.PI / 2 + (Math.random() - 0.5) * 1.7;
+    const speed = power * (0.4 + Math.random() * 0.8);
+    return {
+      x: origin.x + (Math.random() - 0.5) * 30,
+      y: origin.y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      r: 2.5 + Math.random() * 7,
+      color: COLORS[(Math.random() * COLORS.length) | 0],
+      life: 1,
+    };
+  });
+  const start = performance.now();
+  let last = start;
+  const frame = (now) => {
+    const step = Math.min(3, (now - last) / 16.7);
+    last = now;
+    ctx.clearRect(0, 0, width, height);
+    // A glow at the crater for the first moment.
+    const t = now - start;
+    if (t < 500) {
+      const g = ctx.createRadialGradient(origin.x, origin.y, 0, origin.x, origin.y, 160);
+      g.addColorStop(0, `rgba(255, 180, 40, ${0.55 * (1 - t / 500)})`);
+      g.addColorStop(1, 'rgba(255, 120, 30, 0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, width, height);
+    }
+    for (const b of bits) {
+      b.vy += 0.42 * step;
+      b.x += b.vx * step;
+      b.y += b.vy * step;
+      b.life -= 0.012 * step;
+      if (b.life <= 0) continue;
+      ctx.globalAlpha = Math.max(0, b.life);
+      ctx.fillStyle = b.color;
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, b.r * (0.6 + b.life * 0.4), 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    if (t < 1600) requestAnimationFrame(frame);
+    else layer.remove();
+  };
+  requestAnimationFrame(frame);
+}
+
+function showPick(item) {
+  const price = `${item.has_price_range ? `${t('menu.from')} ` : ''}${money(item.from_cents)}`;
+  const close = `<button class="sheet-close" type="button" data-close aria-label="${t('item.close')}">×</button>`;
+  pickDialog.innerHTML = `
+    <div class="sheet-scroll pick-card">
+      ${item.photo ? `<div class="sheet-photo-wrap"><img class="sheet-photo" src="${esc(item.photo.large)}" alt="">${close}</div>` : ''}
+      <div class="sheet-head"><div><p class="pick-kicker">🌋 ${t('pick.kicker')}</p><h2 id="pick-title">${esc(item.name)}</h2></div>${item.photo ? '' : close}</div>
+      ${item.description ? `<p class="sheet-desc">${esc(item.description)}</p>` : ''}
+      <p class="pick-price">${price}</p>
+    </div>
+    <div class="sheet-foot">
+      <button class="btn btn-quiet" type="button" data-again>${t('pick.again')}</button>
+      <button class="btn btn-primary" type="button" data-take="${item.id}">${t('pick.take')}</button>
+    </div>`;
+  pickDialog.showModal();
+}
+
+async function eruptForMeal() {
+  if (picking || !state.menu.length) return;
+  const item = pickDish();
+  if (!item) return;
+  picking = true;
+  track('pick', String(item.id));
+  if (pickDialog.open) pickDialog.close();
+  if (calm()) {
+    showPick(item);
+    picking = false;
+    return;
+  }
+  if (navigator.vibrate) navigator.vibrate([25, 45, 35, 45, 140]);
+  // Burst from the button when it is on screen, otherwise from the bottom of the screen.
+  const box = pickButton.getBoundingClientRect();
+  const visible = box.bottom > 0 && box.top < window.innerHeight;
+  const origin = visible ? { x: box.left + box.width / 2, y: box.top + box.height / 2 } : { x: window.innerWidth / 2, y: window.innerHeight - 20 };
+  pickButton.classList.add('is-rumbling');
+  document.body.classList.add('is-quaking');
+  await pause(480);
+  pickButton.classList.remove('is-rumbling');
+  document.body.classList.remove('is-quaking');
+  lavaBurst(origin);
+  await pause(520);
+  showPick(item);
+  picking = false;
+}
+
+pickButton.addEventListener('click', eruptForMeal);
+pickDialog.addEventListener('click', (event) => {
+  if (event.target.closest('[data-close]')) return pickDialog.close();
+  if (event.target.closest('[data-again]')) return eruptForMeal();
+  const take = event.target.closest('[data-take]');
+  if (take) {
+    pickDialog.close();
+    openItem(Number(take.dataset.take));
+  }
+});
+
 load();
 // Opening status changes through the evening, so refresh it quietly.
 setInterval(async () => {
