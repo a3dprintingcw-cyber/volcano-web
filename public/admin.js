@@ -7,6 +7,7 @@ const app = document.getElementById('app');
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 let role = 'staff';
 let data = null;
+let printer = null;
 let sales = null;
 let toastTimer = null;
 const openDishes = new Set(); // dish editors the manager has open
@@ -67,6 +68,7 @@ function render() {
         </div>
       </section>
       ${admin ? reportPanel() : ''}
+      ${admin ? printerPanel() : ''}
 
       ${
         admin
@@ -180,6 +182,23 @@ async function squareJpeg(file, size, quality) {
 }
 
 // The end of day email for the owners.
+function printerPanel() {
+  if (!printer) return '';
+  const seen = printer.last_seen ? new Date(printer.last_seen) : null;
+  const ago = seen ? Math.round((Date.now() - seen) / 60000) : null;
+  const state = !seen
+    ? 'Not connected yet.'
+    : ago <= 2
+      ? `Connected, last checked in at ${seen.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}.`
+      : `Not heard from since ${seen.toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' })}. Is the printer on?`;
+  return `<section class="panel">
+    <h2>Kitchen printer</h2>
+    <p>The Star printer can print every website order by itself. In the printer's settings, switch on CloudPRNT and paste this link as the server URL. Keep it private.</p>
+    <div class="set"><label>Printer link <input type="text" readonly value="${esc(printer.url)}" onclick="this.select()"></label></div>
+    <p><strong>${esc(state)}</strong>${printer.last_status ? ` Printer says: ${esc(printer.last_status)}.` : ''} Tickets printed: ${printer.printed}.</p>
+  </section>`;
+}
+
 function reportPanel() {
   const s = data.settings;
   return `<section class="panel">
@@ -254,6 +273,7 @@ async function reload() {
   data = fresh;
   role = fresh.role;
   sales = role === 'admin' ? await api('/api/admin/sales').catch(() => null) : null;
+  printer = role === 'admin' ? await api('/api/admin/printer').catch(() => null) : null;
 }
 
 function collectHours() {

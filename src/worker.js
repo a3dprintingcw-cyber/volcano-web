@@ -5,6 +5,7 @@
 import { availability, describeHours, localClock } from './hours.js';
 import { dayReport, parseRecipients, reportEmail, reportReady, sendDueReport, sendReport } from './report.js';
 import { notificationFor, notifyOrder, validEndpoint, vapidKeys } from './push.js';
+import { handleCloudPrnt, printerStatus } from './cloudprnt.js';
 import {
   PAYMENT_MINUTES,
   SentooError,
@@ -649,6 +650,8 @@ const customerView = (o) => ({
 const encoder = new TextEncoder();
 const toHex = (buffer) => [...new Uint8Array(buffer)].map((b) => b.toString(16).padStart(2, '0')).join('');
 
+const printerKey = async (env) => (await hmac(env.SESSION_SECRET, 'cloudprnt-v1')).slice(0, 32);
+
 async function hmac(secret, message) {
   const key = await crypto.subtle.importKey('raw', encoder.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
   return toHex(await crypto.subtle.sign('HMAC', key, encoder.encode(message)));
@@ -778,6 +781,12 @@ async function handleApi(request, env, url, ctx) {
   const path = url.pathname.replace(/\/+$/, '');
   const method = request.method;
   let match;
+
+  // The kitchen's Star printer (CloudPRNT). The secret part of the link is derived from SESSION_SECRET.
+  if ((match = path.match(/^\/api\/cloudprnt\/([a-f0-9]{32})$/))) {
+    if (match[1] !== (await printerKey(env))) return json({ error: 'Not found' }, 404);
+    return handleCloudPrnt(request, url, db, loadOrders, await loadSettings(db));
+  }
 
   // Public
   if (path === '/api/menu' && method === 'GET') {
@@ -1042,6 +1051,11 @@ async function handleApi(request, env, url, ctx) {
     if ('price_cents' in body) changes.price_cents = priceField(body.price_cents);
     await updateRow(db, 'options', Number(match[1]), changes);
     return json({ ok: true });
+  }
+  // Where the kitchen printer should look for orders, and when it last did.
+  if (path === '/api/admin/printer' && method === 'GET') {
+    await requireRole(request, env, 'admin');
+    return json({ url: `${url.origin}/api/cloudprnt/${await printerKey(env)}`, ...(await printerStatus(db)) });
   }
   if (path === '/api/admin/sales' && method === 'GET') {
     await requireRole(request, env, 'admin');
