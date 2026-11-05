@@ -277,7 +277,8 @@ itemDialog.addEventListener('close', () => {
 });
 
 itemDialog.addEventListener('click', (event) => {
-  if (event.target === itemDialog || event.target.closest('[data-close]')) return itemDialog.close();
+  // Only the × closes a dish; tapping the dark area around it does nothing, so choices are not lost by accident.
+  if (event.target.closest('[data-close]')) return itemDialog.close();
   const step = event.target.closest('[data-qty]');
   if (step) {
     draft.quantity = Math.min(20, Math.max(1, draft.quantity + Number(step.dataset.qty)));
@@ -361,6 +362,27 @@ function renderCartBar(bump = false) {
 const cartDialog = $('cart-dialog');
 let backToCart = false; // the dish sheet was opened from the order sheet
 const form = { error: '', sending: false };
+
+// While a dish or the order is open, the menu behind it stays put: no scrolling it on any phone,
+// only the open sheet moves, until the customer adds, closes or cancels.
+{
+  let lockedAt = null;
+  const update = () => {
+    const open = document.querySelector('dialog.sheet[open]');
+    if (open && lockedAt === null) {
+      lockedAt = window.scrollY;
+      document.documentElement.classList.add('sheet-open');
+      document.body.style.top = `-${lockedAt}px`;
+    } else if (!open && lockedAt !== null) {
+      document.documentElement.classList.remove('sheet-open');
+      document.body.style.top = '';
+      window.scrollTo(0, lockedAt);
+      lockedAt = null;
+    }
+  };
+  const watch = new MutationObserver(update);
+  document.querySelectorAll('dialog.sheet').forEach((d) => watch.observe(d, { attributes: true, attributeFilter: ['open'] }));
+}
 
 function renderCart() {
   const { count, total, alcohol } = cartSummary();

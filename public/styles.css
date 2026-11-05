@@ -190,7 +190,10 @@ button { cursor: pointer; }
   background: var(--ash); color: var(--ink); border-radius: 1.4rem 1.4rem 0 0; overflow: hidden;
 }
 .sheet[open] { display: flex; flex-direction: column; }
-.sheet::backdrop { background: rgba(10, 6, 4, 0.72); }
+.sheet::backdrop { background: rgba(10, 6, 4, 0.72); touch-action: none; }
+/* Menu frozen behind an open sheet (app.js keeps the scroll position). */
+html.sheet-open, html.sheet-open body { overflow: hidden; overscroll-behavior: none; }
+html.sheet-open body { position: fixed; left: 0; right: 0; width: 100%; }
 @media (min-width: 46rem) { .sheet { margin: auto; border-radius: 1.4rem; max-height: 88dvh; } }
 /* "flex: 0 1 auto" on purpose: with "flex: 1" iPhones give this part no height at all,
    so the choices and the cart contents disappear and only the button is left. */
