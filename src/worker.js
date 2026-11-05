@@ -1122,7 +1122,7 @@ async function comingSoon(request, env) {
 }
 
 // Android app signing keys allowed to open this site full screen. The first is the
-// PWABuilder upload key; add Google Play's app signing key (Play Console, App integrity) too.
+// PWABuilder upload key, and Google Play's app signing key (Play Console, App integrity).
 const ASSET_LINKS = [
   {
     relation: ['delegate_permission/common.handle_all_urls'],
@@ -1131,6 +1131,7 @@ const ASSET_LINKS = [
       package_name: 'com.volcanostreetfood.app',
       sha256_cert_fingerprints: [
         'AE:61:68:70:B2:CD:6C:18:E9:B8:AA:87:84:38:97:D8:34:7E:5F:A8:1D:D6:73:5B:25:B1:14:2A:31:F2:24:1E',
+        '2B:4B:A8:EB:CD:66:2F:69:6E:94:EA:98:98:99:C3:30:19:9D:68:91:87:71:92:D9:69:88:BC:89:55:20:87:9D',
       ],
     },
   },
