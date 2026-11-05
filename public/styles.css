@@ -158,6 +158,11 @@ button { cursor: pointer; }
 .foot a { color: var(--ash); font-weight: 600; }
 .foot .muted { color: #f3d3c6; }
 .foot p { margin: 0 0 0.4rem; }
+.foot-bottom {
+  max-width: 68rem; margin: 0 auto; padding: 1rem 1rem 1.6rem; border-top: 1px solid rgba(255, 243, 221, 0.25);
+  display: flex; flex-wrap: wrap; gap: 0.4rem 1.2rem; font-size: 0.85rem; color: #f3d3c6;
+}
+.foot-bottom a { font-weight: 600; }
 .hours { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 0.2rem 1.2rem; max-width: 22rem; }
 .hours dt { font-weight: 600; }
 .hours dd { margin: 0; }
