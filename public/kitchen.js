@@ -117,7 +117,7 @@ function card(order, column, serverTime) {
         <button class="btn btn-primary" type="button" data-status="${column.next}">${column.action}</button>
       </div>
       <div class="card-foot card-foot-links">
-        <button class="link" type="button" data-print>Print</button>
+        ${printLinks(order.id)}
         ${column.back ? `<button class="link" type="button" data-status="${column.back}">Move back</button>` : ''}
         <button class="link link-end" type="button" data-cancel>${confirming ? 'Tap again to cancel this order' : 'Cancel order'}</button>
       </div>
@@ -146,7 +146,7 @@ function render() {
         ${data.busy ? `Busy: +${data.busy_extra} min. Tap to end` : `Busy: +${data.busy_extra} min`}
       </button>
       <button class="pill ${state.sound ? 'is-on' : ''}" type="button" data-sound aria-pressed="${state.sound}">Sound ${state.sound ? 'on' : 'off'}</button>
-      <a href="/admin/">Menu and hours</a>
+      <a href="/admin/">Manager page</a>
       <button class="pill" type="button" data-signout>Sign out</button>
     </header>
     ${
@@ -186,7 +186,8 @@ function render() {
                           ? 'Cancelled, online payment not completed'
                           : 'Cancelled'
                 }</td>
-                <td><button class="link" type="button" data-status="ready">Put back on the board</button></td></tr>`
+                <td>${o.status === 'done' ? printLinks(o.id, ['receipt']) : ''}
+                <button class="link" type="button" data-status="ready">Put back on the board</button></td></tr>`
               )
               .join('')}</tbody></table>`
           : '<p class="muted">Nothing finished yet.</p>'
@@ -194,17 +195,33 @@ function render() {
     </details>`;
 }
 
-// Prints one order as a kitchen ticket. Everything else on the page is hidden while printing.
-function printTicket(card) {
-  card.classList.add('is-printing');
-  document.body.classList.add('printing');
-  const done = () => {
-    card.classList.remove('is-printing');
-    document.body.classList.remove('printing');
-    window.removeEventListener('afterprint', done);
-  };
-  window.addEventListener('afterprint', done);
-  window.print();
+// "Print again": the Star printer prints the kitchen ticket or the customer receipt once more.
+const reprinted = new Map(); // "<id>:<kind>" -> message shown for a few seconds
+const PRINT_LABELS = { ticket: 'Print ticket again', receipt: 'Print receipt again' };
+function printLinks(id, kinds = ['ticket', 'receipt']) {
+  return kinds
+    .map((kind) => {
+      const sent = reprinted.get(`${id}:${kind}`);
+      return sent
+        ? `<span class="link-sent">${sent}</span>`
+        : `<button class="link" type="button" data-reprint="${kind}">${PRINT_LABELS[kind]}</button>`;
+    })
+    .join('');
+}
+async function reprint(id, kind) {
+  const key = `${id}:${kind}`;
+  try {
+    await api(`/api/staff/orders/${id}/reprint`, { method: 'POST', body: { kind } });
+    reprinted.set(key, kind === 'receipt' ? 'Receipt sent to printer' : 'Ticket sent to printer');
+  } catch (err) {
+    if (err.status === 401) return location.reload();
+    reprinted.set(key, 'Could not reach the printer service. Try again');
+  }
+  render();
+  setTimeout(() => {
+    reprinted.delete(key);
+    if (state.data) render();
+  }, 5000);
 }
 
 async function refresh() {
@@ -219,8 +236,6 @@ async function refresh() {
       }
     }
     state.seen = new Set([...(state.seen || []), ...ids]);
-    // While a ticket is printing the board must not redraw underneath it.
-    if (document.body.classList.contains('printing')) return;
     state.data = data;
     state.offline = false;
   } catch (err) {
@@ -264,7 +279,7 @@ app.addEventListener('click', (event) => {
     return act(() => api('/api/staff/pause', { method: 'POST', body: { paused: target.dataset.pause === '1' } }));
   }
   if (!id) return;
-  if ('print' in target.dataset) return printTicket(holder);
+  if (target.dataset.reprint) return reprint(id, target.dataset.reprint);
   if ('cancel' in target.dataset) {
     if (state.confirmCancel !== id) {
       state.confirmCancel = id;

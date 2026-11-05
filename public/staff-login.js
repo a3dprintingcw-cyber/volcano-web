@@ -39,7 +39,8 @@ export async function requireStaff(app, { title, needAdmin = false }) {
   });
 }
 
-export async function signOut() {
-  await api('/api/staff/logout', { method: 'POST', body: {} });
+// From the manager page, only the manager sign-in ends; the kitchen board on the same device stays on.
+export async function signOut({ managerOnly = false } = {}) {
+  await api('/api/staff/logout', { method: 'POST', body: managerOnly ? { scope: 'admin' } : {} });
   location.reload();
 }

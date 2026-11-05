@@ -270,6 +270,8 @@ async function save(run, message = 'Saved') {
 
 async function reload() {
   const fresh = await api('/api/staff/menu');
+  // The manager sign-in lasts a few hours. Once it ends, ask for the manager PIN again.
+  if (fresh.role !== 'admin') return location.reload();
   data = fresh;
   role = fresh.role;
   sales = role === 'admin' ? await api('/api/admin/sales').catch(() => null) : null;
@@ -370,7 +372,7 @@ async function changeDish(id, body, message) {
 }
 
 app.addEventListener('click', (event) => {
-  if (event.target.closest('[data-signout]')) return signOut();
+  if (event.target.closest('[data-signout]')) return signOut({ managerOnly: true });
   if (event.target.closest('[data-sales-reset]')) {
     if (!confirmReset) {
       confirmReset = true;
@@ -448,6 +450,6 @@ app.addEventListener('submit', async (event) => {
   app.querySelector(`[data-dish="${created.id}"]`)?.scrollIntoView({ block: 'center' });
 });
 
-role = await requireStaff(app, { title: 'Menu and hours' });
+role = await requireStaff(app, { title: 'Menu and hours', needAdmin: true });
 await reload();
 render();

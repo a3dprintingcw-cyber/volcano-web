@@ -5,7 +5,7 @@
 import { availability, describeHours, localClock } from './hours.js';
 import { dayReport, parseRecipients, reportEmail, reportReady, sendDueReport, sendReport } from './report.js';
 import { notificationFor, notifyOrder, validEndpoint, vapidKeys } from './push.js';
-import { handleCloudPrnt, printerStatus } from './cloudprnt.js';
+import { handleCloudPrnt, printerStatus, queueReprint } from './cloudprnt.js';
 import {
   PAYMENT_MINUTES,
   SentooError,
@@ -31,7 +31,8 @@ const LIMITS = {
   loginFailures: 8,
   windowSeconds: 15 * 60,
 };
-const SESSION_DAYS = 14;
+const SESSION_DAYS = 14; // kitchen sign-in (staff PIN)
+const ADMIN_SESSION_HOURS = 4; // manager sign-in: short, and kept apart from the kitchen sign-in
 
 // ---------- small helpers ----------
 
@@ -669,16 +670,24 @@ function staffConfigured(env) {
   return Boolean(env.SESSION_SECRET && env.STAFF_PIN && env.ADMIN_PIN);
 }
 
-async function sessionRole(request, env) {
-  if (!staffConfigured(env)) return null;
-  const cookie = (request.headers.get('cookie') || '').split(/;\s*/).find((c) => c.startsWith('volcano_staff='));
+// Two separate sign-ins: "volcano_staff" (kitchen, staff PIN, 14 days) and "volcano_admin"
+// (manager page, manager PIN, a few hours). The kitchen sign-in never opens the manager page,
+// even an old one made with the manager PIN.
+async function readSession(request, env, name) {
+  const cookie = (request.headers.get('cookie') || '').split(/;\s*/).find((c) => c.startsWith(`${name}=`));
   if (!cookie) return null;
-  const [role, expires, signature] = cookie.slice('volcano_staff='.length).split('.');
+  const [role, expires, signature] = cookie.slice(name.length + 1).split('.');
   if (!['staff', 'admin'].includes(role) || !(Number(expires) > now()) || !signature) return null;
   const expected = await hmac(env.SESSION_SECRET, `session:${role}.${expires}`);
   let diff = signature.length ^ expected.length;
   for (let i = 0; i < expected.length; i += 1) diff |= expected.charCodeAt(i) ^ (signature.charCodeAt(i) || 0);
   return diff === 0 ? role : null;
+}
+
+async function sessionRole(request, env) {
+  if (!staffConfigured(env)) return null;
+  if ((await readSession(request, env, 'volcano_admin')) === 'admin') return 'admin';
+  return (await readSession(request, env, 'volcano_staff')) ? 'staff' : null;
 }
 
 async function requireRole(request, env, needed) {
@@ -689,9 +698,9 @@ async function requireRole(request, env, needed) {
   return role;
 }
 
-function sessionCookie(request, value, maxAge) {
+function sessionCookie(request, value, maxAge, name = 'volcano_staff') {
   const secure = new URL(request.url).protocol === 'https:' ? '; Secure' : '';
-  return `volcano_staff=${value}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${maxAge}${secure}`;
+  return `${name}=${value}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${maxAge}${secure}`;
 }
 
 async function login(request, env) {
@@ -709,9 +718,19 @@ async function login(request, env) {
     await recordEvent(env.DB, 'login_fail', who);
     throw new HttpError(401, 'That PIN is not right.');
   }
-  const expires = now() + SESSION_DAYS * 24 * 3600;
-  const signature = await hmac(env.SESSION_SECRET, `session:${role}.${expires}`);
-  return json({ role }, 200, { 'set-cookie': sessionCookie(request, `${role}.${expires}.${signature}`, SESSION_DAYS * 24 * 3600) });
+  const signed = async (r, seconds) => {
+    const expires = now() + seconds;
+    return `${r}.${expires}.${await hmac(env.SESSION_SECRET, `session:${r}.${expires}`)}`;
+  };
+  const response = json({ role });
+  // Either PIN keeps the kitchen board signed in. Only the manager PIN opens the manager page, for a few hours.
+  const staffSeconds = SESSION_DAYS * 24 * 3600;
+  response.headers.append('set-cookie', sessionCookie(request, await signed('staff', staffSeconds), staffSeconds));
+  if (role === 'admin') {
+    const adminSeconds = ADMIN_SESSION_HOURS * 3600;
+    response.headers.append('set-cookie', sessionCookie(request, await signed('admin', adminSeconds), adminSeconds, 'volcano_admin'));
+  }
+  return response;
 }
 
 // ---------- admin edits ----------
@@ -881,7 +900,12 @@ async function handleApi(request, env, url, ctx) {
   // Staff sign in
   if (path === '/api/staff/login' && method === 'POST') return login(request, env);
   if (path === '/api/staff/logout' && method === 'POST') {
-    return json({ ok: true }, 200, { 'set-cookie': sessionCookie(request, '', 0) });
+    // Signing out of the manager page only ends the manager sign-in; the kitchen board stays signed in.
+    const managerOnly = (await readJson(request).catch(() => ({}))).scope === 'admin';
+    const response = json({ ok: true });
+    response.headers.append('set-cookie', sessionCookie(request, '', 0, 'volcano_admin'));
+    if (!managerOnly) response.headers.append('set-cookie', sessionCookie(request, '', 0));
+    return response;
   }
   if (path === '/api/staff/session' && method === 'GET') {
     return json({ role: await sessionRole(request, env), configured: staffConfigured(env) });
@@ -911,6 +935,15 @@ async function handleApi(request, env, url, ctx) {
       availability: availability(settings, Date.now()),
       server_time: now(),
     });
+  }
+  // "Print again": the Star printer prints the kitchen ticket or the customer receipt once more.
+  if ((match = path.match(/^\/api\/staff\/orders\/([0-9a-f-]{36})\/reprint$/)) && method === 'POST') {
+    await requireRole(request, env, 'staff');
+    const body = await readJson(request);
+    const order = await db.prepare('SELECT id FROM orders WHERE id = ?').bind(match[1]).first();
+    if (!order) return json({ error: 'Order not found.' }, 404);
+    await queueReprint(db, order.id, body.kind === 'receipt' ? 'r' : 'k');
+    return json({ ok: true });
   }
   if ((match = path.match(/^\/api\/staff\/orders\/([0-9a-f-]{36})$/)) && method === 'PATCH') {
     await requireRole(request, env, 'staff');

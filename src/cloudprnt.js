@@ -52,6 +52,9 @@ async function nextJob(db) {
     receiptSince = Math.floor(Date.now() / 1000);
     await putSetting(db, 'cloudprnt_receipt_since', receiptSince);
   }
+  // "Print again" from the kitchen board goes first.
+  const again = await getSetting(db, 'cloudprnt_reprint', []);
+  if (again.length) return again[0];
   const printed = new Set(await getSetting(db, 'cloudprnt_printed', []));
   const dayAgo = Math.floor(Date.now() / 1000) - 86400;
   const { results } = await db
@@ -71,7 +74,21 @@ const parseJob = (token) => {
   return m ? { kind: m[1], id: m[2] } : { kind: 'k', id: token };
 };
 
+// Queue a ticket ("k") or a customer receipt ("r") to print once more. At most 20 waiting.
+export async function queueReprint(db, orderId, kind) {
+  const again = await getSetting(db, 'cloudprnt_reprint', []);
+  again.push(`${kind === 'r' ? 'r' : 'k'}:${orderId}`);
+  await putSetting(db, 'cloudprnt_reprint', again.slice(-20));
+}
+
 async function markPrinted(db, token) {
+  // A reprint is done once printed: take it off the queue.
+  const again = await getSetting(db, 'cloudprnt_reprint', []);
+  const i = again.indexOf(token);
+  if (i !== -1) {
+    again.splice(i, 1);
+    await putSetting(db, 'cloudprnt_reprint', again);
+  }
   const printed = await getSetting(db, 'cloudprnt_printed', []);
   if (printed.includes(token)) return;
   printed.push(token);
@@ -253,7 +270,11 @@ export async function handleCloudPrnt(request, url, db, loadOrders, settings) {
     if (!token) return new Response('', { status: 404 });
     const job = parseJob(token);
     const [order] = await loadOrders(db, 'id = ?', [job.id]);
-    if (!order) return new Response('', { status: 404 });
+    if (!order) {
+      // Never let a missing order block the printer.
+      await markPrinted(db, `${job.kind}:${job.id}`);
+      return new Response('', { status: 404 });
+    }
     const offset = settings.timezone_offset_minutes || 0;
     const type = params.get('type') || 'text/plain';
     await putSetting(db, 'cloudprnt_last_get', { at: Date.now(), kind: job.kind, type });
