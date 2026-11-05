@@ -819,7 +819,7 @@ function showPick(item) {
   pickDialog.innerHTML = `
     <div class="sheet-scroll pick-card">
       ${item.photo ? `<div class="sheet-photo-wrap"><img class="sheet-photo" src="${esc(item.photo.large)}" alt="">${close}</div>` : ''}
-      <div class="sheet-head"><div><p class="pick-kicker">🌋 ${t('pick.kicker')}</p><h2 id="pick-title">${esc(item.name)}</h2></div>${item.photo ? '' : close}</div>
+      <div class="sheet-head"><div><p class="pick-kicker">${t('pick.kicker')}</p><h2 id="pick-title">${esc(item.name)}</h2></div>${item.photo ? '' : close}</div>
       ${item.description ? `<p class="sheet-desc">${esc(item.description)}</p>` : ''}
       <p class="pick-price">${price}</p>
     </div>

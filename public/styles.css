@@ -308,7 +308,8 @@ fieldset.group legend { padding: 0; font-weight: 700; font-size: 1.05rem; displa
 }
 
 /* ---------- "Erupt for a meal" ---------- */
-.hero-actions { display: flex; flex-wrap: wrap; gap: 0.7rem; }
+.hero-actions { display: flex; flex-wrap: nowrap; gap: 0.6rem; }
+.hero-actions .btn { padding-left: 1.3rem; padding-right: 1.3rem; white-space: nowrap; }
 .btn-erupt { background: transparent; color: var(--magma); border: 2px solid var(--magma); }
 .btn-erupt:hover { background: rgba(253, 180, 41, 0.12); }
 .btn-erupt:active { transform: translateY(2px); }
