@@ -4,6 +4,29 @@ import { hoursText, noticeText, t, translatePage } from '/i18n.js';
 
 translatePage();
 
+// Anonymous visit counting for the owner's dashboard: no cookies, nothing about the customer.
+// "src" lets a link say where it was shared, for example volcanostreetfood.com/?src=insta
+function track(kind, page = '') {
+  try {
+    const app = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+    const body = JSON.stringify({
+      kind,
+      page,
+      referrer: kind === 'view' ? document.referrer : '',
+      src: new URLSearchParams(location.search).get('src') || '',
+      lang: document.documentElement.lang,
+      app,
+    });
+    const blob = new Blob([body], { type: 'application/json' });
+    if (!navigator.sendBeacon || !navigator.sendBeacon('/api/visit', blob)) {
+      fetch('/api/visit', { method: 'POST', headers: { 'content-type': 'application/json' }, body, keepalive: true }).catch(() => {});
+    }
+  } catch {
+    /* counting must never get in the way of ordering */
+  }
+}
+track('view', 'menu');
+
 const CART_KEY = 'volcano_cart_v1';
 const CUSTOMER_KEY = 'volcano_customer_v1';
 const LAST_ORDER_KEY = 'volcano_last_order_v1';
@@ -163,6 +186,7 @@ let draft = null;
 function openItem(id) {
   const item = state.items.get(id);
   if (!item || !item.available) return;
+  track('dish', String(id));
   draft = { item, quantity: 1, chosen: new Set() };
 
   const groups = item.groups
@@ -367,7 +391,10 @@ const form = { error: '', sending: false };
 // only the open sheet moves, until the customer adds, closes or cancels.
 {
   let lockedAt = null;
+  let cartWasOpen = false;
   const update = () => {
+    if (cartDialog.open && !cartWasOpen) track('cart', 'order');
+    cartWasOpen = cartDialog.open;
     const open = document.querySelector('dialog.sheet[open]');
     if (open && lockedAt === null) {
       lockedAt = window.scrollY;

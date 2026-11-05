@@ -6,6 +6,7 @@ import { availability, describeHours, localClock } from './hours.js';
 import { dayReport, parseRecipients, reportEmail, reportReady, sendDueReport, sendReport } from './report.js';
 import { notificationFor, notifyOrder, validEndpoint, vapidKeys } from './push.js';
 import { handleCloudPrnt, printerStatus, queueReprint } from './cloudprnt.js';
+import { customerList, dashboardStats, forgetOldVisits, orderList, readRange, recordVisit } from './stats.js';
 import {
   PAYMENT_MINUTES,
   SentooError,
@@ -897,6 +898,19 @@ async function handleApi(request, env, url, ctx) {
     return json({ order: customerView(order), info: publicInfo(settings, env) });
   }
 
+  // Visitor statistics beacon. Counts nothing for signed-in staff; never fails the page.
+  if (path === '/api/visit' && method === 'POST') {
+    if (!(await sessionRole(request, env)) && env.SESSION_SECRET) {
+      const body = await readJson(request).catch(() => ({}));
+      const work = loadSettings(db)
+        .then((settings) => recordVisit(db, { body, request, settings, secret: env.SESSION_SECRET, hmac }))
+        .catch((err) => console.error('visit not recorded', err && err.message));
+      if (ctx && ctx.waitUntil) ctx.waitUntil(work);
+      else await work;
+    }
+    return new Response(null, { status: 204 });
+  }
+
   // Staff sign in
   if (path === '/api/staff/login' && method === 'POST') return login(request, env);
   if (path === '/api/staff/logout' && method === 'POST') {
@@ -1094,6 +1108,23 @@ async function handleApi(request, env, url, ctx) {
     await requireRole(request, env, 'admin');
     return json(await salesSummary(db, await loadSettings(db)));
   }
+  // Manager dashboard: figures for a date range (?from=YYYY-MM-DD&to=YYYY-MM-DD), orders and customers.
+  if (path === '/api/admin/stats' && method === 'GET') {
+    await requireRole(request, env, 'admin');
+    const settings = await loadSettings(db);
+    return json(await dashboardStats(db, settings, readRange(url, settings)));
+  }
+  if (path === '/api/admin/orders' && method === 'GET') {
+    await requireRole(request, env, 'admin');
+    const settings = await loadSettings(db);
+    const p = url.searchParams;
+    return json(await orderList(db, settings, readRange(url, settings), { q: p.get('q'), status: p.get('status'), offset: p.get('offset'), limit: p.get('limit') }));
+  }
+  if (path === '/api/admin/customers' && method === 'GET') {
+    await requireRole(request, env, 'admin');
+    const settings = await loadSettings(db);
+    return json(await customerList(db, settings, readRange(url, settings)));
+  }
   // The day report: GET shows what tonight's email will say, POST sends today's figures now.
   if (path === '/api/admin/report' && (method === 'GET' || method === 'POST')) {
     await requireRole(request, env, 'admin');
@@ -1196,6 +1227,7 @@ export default {
   async scheduled(controller, env, ctx) {
     ctx.waitUntil(closeAbandonedPayments(env));
     ctx.waitUntil(sendDueReport(env));
+    ctx.waitUntil(forgetOldVisits(env.DB));
   },
 };
 
