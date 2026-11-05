@@ -27,3 +27,16 @@ test('kitchen ticket fits 48 columns and is plain ASCII', () => {
   assert.match(text, /PAY CASH AT PICKUP/);
   assert.match(text, /Kitchen note: Extra napkins please/);
 });
+
+test('customer receipt as text fits 48 columns', async () => {
+  const { receiptText } = await import('../src/cloudprnt.js');
+  const text = receiptText(order, -240);
+  for (const line of text.split('\n')) assert.ok(line.length <= 48 && /^[\x20-\x7e]*$/.test(line), `bad line: ${line}`);
+  assert.match(text, /#107/);
+  assert.match(text, /1 COLA +4,00/);
+  assert.match(text, /Total +XCG 64,00/);
+  assert.match(text, /Cash at pickup +64,00/);
+  assert.match(text, /To pay +64,00/);
+  assert.match(text, /9,00%: +58,72 +5,28 +64,00/);
+  assert.match(text, /Eruption of Flavors!/);
+});

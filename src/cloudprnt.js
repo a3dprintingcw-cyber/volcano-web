@@ -43,22 +43,38 @@ async function startTime(db) {
   return since;
 }
 
-async function nextOrder(db) {
+// Every order prints twice: the kitchen ticket ("k:<id>"), then the customer receipt ("r:<id>").
+// Receipts start with orders placed after this feature went live, so nothing old prints.
+async function nextJob(db) {
   const since = await startTime(db);
+  let receiptSince = await getSetting(db, 'cloudprnt_receipt_since', null);
+  if (!receiptSince) {
+    receiptSince = Math.floor(Date.now() / 1000);
+    await putSetting(db, 'cloudprnt_receipt_since', receiptSince);
+  }
   const printed = new Set(await getSetting(db, 'cloudprnt_printed', []));
   const dayAgo = Math.floor(Date.now() / 1000) - 86400;
   const { results } = await db
-    .prepare(`SELECT id FROM orders WHERE ${PRINTABLE} AND created_at >= ? ORDER BY created_at, number LIMIT 50`)
+    .prepare(`SELECT id, created_at FROM orders WHERE ${PRINTABLE} AND created_at >= ? ORDER BY created_at, number LIMIT 50`)
     .bind(Math.max(since, dayAgo))
     .all();
-  const next = results.find((o) => !printed.has(o.id));
-  return next ? next.id : null;
+  for (const o of results) {
+    // Older tickets were remembered by plain order id.
+    if (!printed.has(`k:${o.id}`) && !printed.has(o.id)) return `k:${o.id}`;
+    if (o.created_at >= receiptSince && !printed.has(`r:${o.id}`)) return `r:${o.id}`;
+  }
+  return null;
 }
 
-async function markPrinted(db, id) {
+const parseJob = (token) => {
+  const m = /^([kr]):(.+)$/.exec(token || '');
+  return m ? { kind: m[1], id: m[2] } : { kind: 'k', id: token };
+};
+
+async function markPrinted(db, token) {
   const printed = await getSetting(db, 'cloudprnt_printed', []);
-  if (printed.includes(id)) return;
-  printed.push(id);
+  if (printed.includes(token)) return;
+  printed.push(token);
   await putSetting(db, 'cloudprnt_printed', printed.slice(-KEEP_IDS));
 }
 
@@ -152,6 +168,51 @@ export function ticketText(order, offsetMinutes) {
   return out.join('\n');
 }
 
+// The customer receipt as plain text, laid out like the Lightspeed receipt,
+// for printers that do not take pictures.
+export function receiptText(order, offsetMinutes) {
+  const clock = localClock(order.created_at * 1000, offsetMinutes);
+  const [yy, mm, dd] = clock.date.split('-');
+  const hhmm = `${String(Math.floor(clock.minutes / 60)).padStart(2, '0')}:${String(clock.minutes % 60).padStart(2, '0')}`;
+  const amt = (cents) => (cents / 100).toFixed(2).replace('.', ',');
+  const out = [];
+  out.push(rule('='));
+  out.push(center(`#${order.number}`));
+  out.push(center('VOLCANO STREET FOOD'));
+  out.push(rule('='));
+  out.push(leftRight('WEBSITE ORDER', `${dd}/${mm}/${yy} ${hhmm}`));
+  out.push(leftRight(order.customer_name, order.phone || ''));
+  out.push(rule());
+  out.push(leftRight('# Item', 'Price'));
+  for (const item of order.items) {
+    out.push(leftRight(`${item.quantity} ${ascii(item.name).toUpperCase()}`, amt(item.unit_price_cents * item.quantity)));
+    for (const option of item.options || []) out.push(...wrap(`* ${String(option).toUpperCase()}`, WIDTH, '   '));
+  }
+  out.push(rule());
+  out.push(leftRight('Total', `XCG ${amt(order.total_cents)}`));
+  out.push(rule());
+  const paid = order.payment_status === 'paid';
+  const method =
+    order.payment_method === 'sentoo' ? (paid ? 'Paid online' : 'Online, not paid yet')
+      : order.payment_method === 'cash' ? 'Cash at pickup'
+        : order.payment_method === 'card' ? 'Card at pickup' : 'Pay at pickup';
+  out.push(leftRight('Payment', 'Amount'));
+  out.push(leftRight(method, amt(order.total_cents)));
+  out.push(leftRight(paid ? 'Total paid' : 'To pay', amt(order.total_cents)));
+  out.push(rule());
+  const net = Math.round((order.total_cents * 100) / 109);
+  const cols = (a, b, c, d) => a.padEnd(12) + b.padStart(12) + c.padStart(12) + d.padStart(12);
+  out.push(cols('', 'Net', 'OB', 'Gross'));
+  out.push(cols('9,00%:', amt(net), amt(order.total_cents - net), amt(order.total_cents)));
+  out.push(rule());
+  out.push('');
+  out.push(center('Eruption of Flavors!'));
+  out.push('');
+  out.push('VOLCANO STREET FOOD', 'Rooseveltweg 271', 'Willemstad, Curacao', '+5999 565 2266', 'CRIB : 102.673.913');
+  out.push('', '');
+  return out.join('\n');
+}
+
 // ---------- the endpoint ----------
 
 const json = (body) => new Response(JSON.stringify(body), { headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
@@ -170,28 +231,38 @@ export async function handleCloudPrnt(request, url, db, loadOrders, settings) {
       // A malformed status report still gets an answer.
     }
     await noteSeen(db, status);
-    const id = await nextOrder(db);
-    return json(id ? { jobReady: true, mediaTypes: ['image/png', 'text/plain'], jobToken: id, deleteMethod: 'DELETE' } : { jobReady: false });
+    const token = await nextJob(db);
+    if (!token) return json({ jobReady: false });
+    // Kitchen ticket: plain text. Customer receipt: a picture if the printer takes one, otherwise text.
+    const mediaTypes = parseJob(token).kind === 'r' ? ['image/png', 'text/plain'] : ['text/plain'];
+    return json({ jobReady: true, mediaTypes, jobToken: token, deleteMethod: 'DELETE' });
   }
 
   // The printer says how printing went.
   const isDelete = method === 'DELETE' || (method === 'GET' && params.has('delete'));
   if (isDelete) {
     const code = decodeURIComponent(params.get('code') || '');
-    const id = params.get('token') || (await nextOrder(db));
-    if (id && code.startsWith('2')) await markPrinted(db, id);
+    const token = params.get('token') || (await nextJob(db));
+    if (token && code.startsWith('2')) await markPrinted(db, token.includes(':') ? token : `k:${token}`);
     return new Response(null, { status: 200 });
   }
 
   // The printer fetches the ticket.
   if (method === 'GET') {
-    const id = params.get('token') || (await nextOrder(db));
-    if (!id) return new Response('', { status: 404 });
-    const [order] = await loadOrders(db, 'id = ?', [id]);
+    const token = params.get('token') || (await nextJob(db));
+    if (!token) return new Response('', { status: 404 });
+    const job = parseJob(token);
+    const [order] = await loadOrders(db, 'id = ?', [job.id]);
     if (!order) return new Response('', { status: 404 });
     const offset = settings.timezone_offset_minutes || 0;
-    // The printer asks for one of the types we offered: a receipt picture, or plain text as a fallback.
-    if ((params.get('type') || 'image/png').includes('png')) {
+    const type = params.get('type') || 'text/plain';
+    await putSetting(db, 'cloudprnt_last_get', { at: Date.now(), kind: job.kind, type });
+    if (job.kind === 'r' && !type.includes('png')) {
+      return new Response(receiptText(order, offset), {
+        headers: { 'content-type': 'text/plain', 'X-Star-Cut': 'full; feed=true', 'cache-control': 'no-store' },
+      });
+    }
+    if (job.kind === 'r') {
       return new Response(await receiptPng(order, offset), {
         headers: { 'content-type': 'image/png', 'X-Star-Cut': 'full; feed=true', 'cache-control': 'no-store' },
       });
@@ -205,10 +276,17 @@ export async function handleCloudPrnt(request, url, db, loadOrders, settings) {
 }
 
 export async function printerStatus(db) {
-  const [seen, printed, since] = await Promise.all([
+  const [seen, printed, since, lastGet] = await Promise.all([
     getSetting(db, 'cloudprnt_seen', null),
     getSetting(db, 'cloudprnt_printed', []),
     getSetting(db, 'cloudprnt_since', null),
+    getSetting(db, 'cloudprnt_last_get', null),
   ]);
-  return { last_seen: seen ? seen.at : null, last_status: seen ? seen.status : '', printed: printed.length, connected_since: since };
+  return {
+    last_seen: seen ? seen.at : null,
+    last_status: seen ? seen.status : '',
+    printed: printed.length,
+    connected_since: since,
+    last_job: lastGet,
+  };
 }
