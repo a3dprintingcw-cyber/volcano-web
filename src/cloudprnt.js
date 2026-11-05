@@ -9,6 +9,7 @@
 // No database change: what has been printed is kept in the settings table.
 
 import { formatMinutes, localClock } from './hours.js';
+import { receiptPng } from './receipt.js';
 
 const WIDTH = 48; // characters per line on 80 mm paper
 const PRINTABLE = "status IN ('new','preparing','ready','done')";
@@ -170,7 +171,7 @@ export async function handleCloudPrnt(request, url, db, loadOrders, settings) {
     }
     await noteSeen(db, status);
     const id = await nextOrder(db);
-    return json(id ? { jobReady: true, mediaTypes: ['text/plain'], jobToken: id, deleteMethod: 'DELETE' } : { jobReady: false });
+    return json(id ? { jobReady: true, mediaTypes: ['image/png', 'text/plain'], jobToken: id, deleteMethod: 'DELETE' } : { jobReady: false });
   }
 
   // The printer says how printing went.
@@ -188,7 +189,14 @@ export async function handleCloudPrnt(request, url, db, loadOrders, settings) {
     if (!id) return new Response('', { status: 404 });
     const [order] = await loadOrders(db, 'id = ?', [id]);
     if (!order) return new Response('', { status: 404 });
-    return new Response(ticketText(order, settings.timezone_offset_minutes || 0), {
+    const offset = settings.timezone_offset_minutes || 0;
+    // The printer asks for one of the types we offered: a receipt picture, or plain text as a fallback.
+    if ((params.get('type') || 'image/png').includes('png')) {
+      return new Response(await receiptPng(order, offset), {
+        headers: { 'content-type': 'image/png', 'X-Star-Cut': 'full; feed=true', 'cache-control': 'no-store' },
+      });
+    }
+    return new Response(ticketText(order, offset), {
       headers: { 'content-type': 'text/plain', 'X-Star-Cut': 'full; feed=true', 'cache-control': 'no-store' },
     });
   }
