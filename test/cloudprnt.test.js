@@ -21,7 +21,7 @@ test('kitchen ticket fits 48 columns and is plain ASCII', () => {
   assert.match(text, /ORDER #107/);
   assert.match(text, /Jurgen Nono/);
   assert.match(text, /2 x DOUBLE STACKER +XCG 60\.00/);
-  assert.match(text, /\+ No onion/);
+  assert.match(text, /\+ NO ONION/);
   assert.match(text, /NOTE: well done/);
   assert.match(text, /TOTAL +XCG 64\.00/);
   assert.match(text, /PAY CASH AT PICKUP/);
@@ -48,4 +48,13 @@ test('kitchen ticket picture is a full-width PNG', async () => {
   const { width, height } = drawKitchenTicket(order, -240);
   assert.equal(width, 576);
   assert.ok(height > 400 && height < 6000);
+});
+
+test('kitchen ticket markup uses double-size letters for the dishes', async () => {
+  const { ticketMarkup } = await import('../src/cloudprnt.js');
+  const text = ticketMarkup({ ...order, notes: 'no [cut] please' }, -240);
+  assert.match(text, /\[magnify: width 2; height 2\]\nORDER #107/);
+  assert.match(text, /2x DOUBLE STACKER/);
+  assert.match(text, /NOTE: no cut please/);
+  assert.match(text, /\[cut: feed; full\]$/);
 });

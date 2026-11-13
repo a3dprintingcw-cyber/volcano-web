@@ -162,7 +162,8 @@ export function ticketText(order, offsetMinutes) {
   out.push(order.pickup_type === 'scheduled' ? `PICKUP AT ${time(order.pickup_at)}` : `PICKUP ASAP (about ${time(order.pickup_at)})`);
   out.push(`Placed ${time(order.created_at)}`);
   out.push(rule());
-  for (const item of order.items) {
+  order.items.forEach((item, i) => {
+    if (i) out.push('');
     const name = `${item.quantity} x ${ascii(item.name).toUpperCase()}`;
     const price = money(item.unit_price_cents * item.quantity);
     if (name.length + price.length + 1 <= WIDTH) out.push(leftRight(name, price));
@@ -170,9 +171,9 @@ export function ticketText(order, offsetMinutes) {
       out.push(...wrap(name));
       out.push(leftRight('', price));
     }
-    for (const option of item.options || []) out.push(...wrap(`+ ${option}`, WIDTH, '    '));
+    for (const option of item.options || []) out.push(...wrap(`+ ${String(option).toUpperCase()}`, WIDTH, '    '));
     if (item.note) out.push(...wrap(`NOTE: ${item.note}`, WIDTH, '    '));
-  }
+  });
   out.push(rule());
   out.push(leftRight('TOTAL', money(order.total_cents)));
   out.push(payLine(order));
@@ -182,6 +183,32 @@ export function ticketText(order, offsetMinutes) {
   }
   out.push(rule('='));
   out.push('', '');
+  return out.join('\n');
+}
+
+// The kitchen ticket in Star Document Markup: the same text, but the order number,
+// pickup time, name and dishes in double-size letters so the kitchen can read them.
+// Brackets are markup commands, so they are taken out of what customers typed.
+export function ticketMarkup(order, offsetMinutes) {
+  const time = (sec) => formatMinutes(localClock(sec * 1000, offsetMinutes).minutes);
+  const t = (text) => ascii(text).replace(/[[\]]/g, '');
+  const BIG = '[magnify: width 2; height 2]';
+  const SMALL = '[magnify: width 1; height 1]';
+  const out = [];
+  out.push('[align: centre]', BIG, `ORDER #${order.number}`, '[align: left]');
+  out.push(order.pickup_type === 'scheduled' ? `PICKUP ${time(order.pickup_at)}` : `ASAP ${time(order.pickup_at)}`);
+  out.push(t(order.customer_name));
+  out.push(SMALL, `${t(order.phone)}   placed ${time(order.created_at)}`, rule());
+  for (const item of order.items) {
+    out.push(BIG, `${item.quantity}x ${t(item.name).toUpperCase()}`);
+    for (const option of item.options || []) out.push(`  - ${t(option).toUpperCase()}`);
+    if (item.note) out.push(`  NOTE: ${t(item.note)}`);
+    out.push(SMALL, '');
+  }
+  out.push(rule());
+  if (order.notes) out.push(BIG, `NOTE: ${t(order.notes)}`, SMALL, rule());
+  out.push(leftRight(payLine(order), money(order.total_cents)));
+  out.push('', '', '[cut: feed; full]');
   return out.join('\n');
 }
 
@@ -252,7 +279,7 @@ export async function handleCloudPrnt(request, url, db, loadOrders, settings) {
     if (!token) return json({ jobReady: false });
     // Both the kitchen ticket and the customer receipt go as a picture if the printer takes one,
     // otherwise as text. The picture lets the kitchen ticket use large type.
-    const mediaTypes = ['image/png', 'text/plain'];
+    const mediaTypes = parseJob(token).kind === 'r' ? ['image/png', 'text/plain'] : ['image/png', 'text/vnd.star.markup', 'text/plain'];
     return json({ jobReady: true, mediaTypes, jobToken: token, deleteMethod: 'DELETE' });
   }
 
@@ -292,6 +319,11 @@ export async function handleCloudPrnt(request, url, db, loadOrders, settings) {
     if (type.includes('png')) {
       return new Response(await kitchenPng(order, offset), {
         headers: { 'content-type': 'image/png', 'X-Star-Cut': 'full; feed=true', 'cache-control': 'no-store' },
+      });
+    }
+    if (type.includes('markup')) {
+      return new Response(ticketMarkup(order, offset), {
+        headers: { 'content-type': 'text/vnd.star.markup', 'cache-control': 'no-store' },
       });
     }
     return new Response(ticketText(order, offset), {
