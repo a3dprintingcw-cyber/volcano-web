@@ -206,6 +206,79 @@ export function drawReceipt(order, offsetMinutes) {
   return { width: WIDTH, height: Math.max(y, c.bottom), px: c.px };
 }
 
+
+// The kitchen ticket: everything the cooks need, in large type so it reads from a distance.
+// No prices per dish, only the total and how the customer pays.
+export function drawKitchenTicket(order, offsetMinutes) {
+  const c = new Canvas(WIDTH, 6000);
+  let y = 0;
+  const right = WIDTH - PAD;
+  const lineH = (f) => FONTS[f].h;
+
+  const lines = (text, font, x = PAD, gap = 2) => {
+    for (const l of wrapText(text, font, right - x)) {
+      drawText(c, x, y, l, font);
+      y += lineH(font) - gap;
+    }
+  };
+  const rule = (thick = 4) => {
+    y += 6;
+    c.rect(PAD, y, right - PAD, thick);
+    y += thick + 10;
+  };
+
+  // Number bar
+  const barH = FONTS.number.h + 6;
+  c.rect(PAD, y, WIDTH - 2 * PAD, barH);
+  const num = `#${order.number}`;
+  drawText(c, Math.round((WIDTH - textWidth(num, 'number')) / 2), y + 2, num, 'number', 0);
+  y += barH + 12;
+
+  const time = (sec) => formatMinutes(localClock(sec * 1000, offsetMinutes).minutes);
+  lines(order.pickup_type === 'scheduled' ? `PICKUP ${time(order.pickup_at)}` : `ASAP (${time(order.pickup_at)})`, 'big');
+  lines(String(order.customer_name || ''), 'big');
+  lines(`${order.phone || ''}   placed ${time(order.created_at)}`, 'body');
+  rule();
+
+  // Items
+  order.items.forEach((item, i) => {
+    if (i) y += 10;
+    lines(`${item.quantity}x ${String(item.name).toUpperCase()}`, 'big');
+    for (const option of item.options || []) lines(`- ${String(option).toUpperCase()}`, 'bold', PAD + 34);
+    if (item.note) lines(`NOTE: ${item.note}`, 'bold', PAD + 34);
+  });
+  rule();
+
+  // Order note, in a black box so it is not missed
+  if (order.notes) {
+    const noteLines = wrapText(`NOTE: ${order.notes}`, 'big', right - PAD - 24);
+    const boxH = noteLines.length * (lineH('big') - 2) + 16;
+    c.rect(PAD, y, right - PAD, boxH);
+    let ny = y + 8;
+    for (const l of noteLines) {
+      drawText(c, PAD + 12, ny, l, 'big', 0);
+      ny += lineH('big') - 2;
+    }
+    y += boxH;
+    rule();
+  }
+
+  // Payment
+  const paid = order.payment_status === 'paid';
+  const pay =
+    order.payment_method === 'sentoo'
+      ? paid ? 'PAID ONLINE' : 'ONLINE, NOT PAID YET'
+      : order.payment_method === 'cash' ? 'CASH AT PICKUP'
+        : order.payment_method === 'card' ? 'CARD AT PICKUP' : 'PAY AT PICKUP';
+  const total = `XCG ${amount(order.total_cents)}`;
+  drawText(c, PAD, y, pay, 'bold');
+  drawText(c, right - textWidth(total, 'bold'), y, total, 'bold');
+  y += lineH('bold');
+  y += 40; // room before the cut
+
+  return { width: WIDTH, height: Math.max(y, c.bottom), px: c.px };
+}
+
 // ---------- PNG ----------
 
 const CRC = (() => {
@@ -236,8 +309,10 @@ async function deflate(bytes) {
   return new Uint8Array(await new Response(stream).arrayBuffer());
 }
 
-export async function receiptPng(order, offsetMinutes) {
-  const { width, height, px } = drawReceipt(order, offsetMinutes);
+export const receiptPng = (order, offsetMinutes) => toPng(drawReceipt(order, offsetMinutes));
+export const kitchenPng = (order, offsetMinutes) => toPng(drawKitchenTicket(order, offsetMinutes));
+
+async function toPng({ width, height, px }) {
   // 1 bit per pixel grayscale: 0 = black, 1 = white.
   const rowBytes = Math.ceil(width / 8);
   const raw = new Uint8Array((rowBytes + 1) * height).fill(0);

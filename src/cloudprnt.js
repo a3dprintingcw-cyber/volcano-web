@@ -3,13 +3,13 @@
 //
 // Protocol (CloudPRNT HTTP):
 //   POST  the printer reports its status, we answer whether a job is ready.
-//   GET   the printer fetches the job (here: a plain text kitchen ticket).
+//   GET   the printer fetches the job (a picture, or plain text if the printer asks for it).
 //   DELETE (or GET with ?delete) the printer says whether printing worked.
 //
 // No database change: what has been printed is kept in the settings table.
 
 import { formatMinutes, localClock } from './hours.js';
-import { receiptPng } from './receipt.js';
+import { kitchenPng, receiptPng } from './receipt.js';
 
 const WIDTH = 48; // characters per line on 80 mm paper
 const PRINTABLE = "status IN ('new','preparing','ready','done')";
@@ -250,8 +250,9 @@ export async function handleCloudPrnt(request, url, db, loadOrders, settings) {
     await noteSeen(db, status);
     const token = await nextJob(db);
     if (!token) return json({ jobReady: false });
-    // Kitchen ticket: plain text. Customer receipt: a picture if the printer takes one, otherwise text.
-    const mediaTypes = parseJob(token).kind === 'r' ? ['image/png', 'text/plain'] : ['text/plain'];
+    // Both the kitchen ticket and the customer receipt go as a picture if the printer takes one,
+    // otherwise as text. The picture lets the kitchen ticket use large type.
+    const mediaTypes = ['image/png', 'text/plain'];
     return json({ jobReady: true, mediaTypes, jobToken: token, deleteMethod: 'DELETE' });
   }
 
@@ -285,6 +286,11 @@ export async function handleCloudPrnt(request, url, db, loadOrders, settings) {
     }
     if (job.kind === 'r') {
       return new Response(await receiptPng(order, offset), {
+        headers: { 'content-type': 'image/png', 'X-Star-Cut': 'full; feed=true', 'cache-control': 'no-store' },
+      });
+    }
+    if (type.includes('png')) {
+      return new Response(await kitchenPng(order, offset), {
         headers: { 'content-type': 'image/png', 'X-Star-Cut': 'full; feed=true', 'cache-control': 'no-store' },
       });
     }

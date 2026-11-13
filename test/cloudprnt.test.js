@@ -40,3 +40,12 @@ test('customer receipt as text fits 48 columns', async () => {
   assert.match(text, /9,00%: +58,72 +5,28 +64,00/);
   assert.match(text, /Eruption of Flavors!/);
 });
+
+test('kitchen ticket picture is a full-width PNG', async () => {
+  const { kitchenPng, drawKitchenTicket } = await import('../src/receipt.js');
+  const png = await kitchenPng(order, -240);
+  assert.deepEqual([...png.slice(0, 4)], [137, 80, 78, 71]);
+  const { width, height } = drawKitchenTicket(order, -240);
+  assert.equal(width, 576);
+  assert.ok(height > 400 && height < 6000);
+});
