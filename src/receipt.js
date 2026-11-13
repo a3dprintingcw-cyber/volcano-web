@@ -312,6 +312,34 @@ async function deflate(bytes) {
 export const receiptPng = (order, offsetMinutes) => toPng(drawReceipt(order, offsetMinutes));
 export const kitchenPng = (order, offsetMinutes) => toPng(drawKitchenTicket(order, offsetMinutes));
 
+// The kitchen ticket as StarPRNT commands: the same picture sent as raster graphics,
+// the printer's own format (what Lightspeed's Star driver sends), then a full cut.
+export function kitchenStarPrnt(order, offsetMinutes) {
+  const { width, height, px } = drawKitchenTicket(order, offsetMinutes);
+  const rowBytes = Math.ceil(width / 8);
+  const parts = [Uint8Array.of(0x1b, 0x40)]; // ESC @ initialise
+  const BAND = 200; // lines per raster command
+  for (let top = 0; top < height; top += BAND) {
+    const h = Math.min(BAND, height - top);
+    // ESC GS S m xL xH yL yH n: m = 1, n = 0 (black)
+    const head = [0x1b, 0x1d, 0x53, 1, rowBytes & 0xff, rowBytes >> 8, h & 0xff, h >> 8, 0];
+    const full = new Uint8Array(head.length + rowBytes * h);
+    full.set(head);
+    for (let y = 0; y < h; y++)
+      for (let x = 0; x < width; x++)
+        if (px[(top + y) * width + x]) full[head.length + y * rowBytes + (x >> 3)] |= 0x80 >> (x & 7);
+    parts.push(full);
+  }
+  parts.push(Uint8Array.of(0x1b, 0x64, 0x02)); // ESC d 2: feed and full cut
+  const out = new Uint8Array(parts.reduce((n, p) => n + p.length, 0));
+  let o = 0;
+  for (const p of parts) {
+    out.set(p, o);
+    o += p.length;
+  }
+  return out;
+}
+
 async function toPng({ width, height, px }) {
   // 1 bit per pixel grayscale: 0 = black, 1 = white.
   const rowBytes = Math.ceil(width / 8);

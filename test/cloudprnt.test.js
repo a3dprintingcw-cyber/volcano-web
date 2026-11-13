@@ -58,3 +58,13 @@ test('kitchen ticket markup uses double-size letters for the dishes', async () =
   assert.match(text, /NOTE: no cut please/);
   assert.match(text, /\[cut: feed; full\]$/);
 });
+
+test('kitchen ticket as StarPRNT raster: header, full bands, cut', async () => {
+  const { kitchenStarPrnt, drawKitchenTicket } = await import('../src/receipt.js');
+  const bytes = kitchenStarPrnt(order, -240);
+  const { height } = drawKitchenTicket(order, -240);
+  assert.deepEqual([...bytes.slice(0, 5)], [0x1b, 0x40, 0x1b, 0x1d, 0x53]);
+  assert.deepEqual([...bytes.slice(-3)], [0x1b, 0x64, 0x02]);
+  const bands = Math.ceil(height / 200);
+  assert.equal(bytes.length, 2 + bands * 9 + 72 * height + 3);
+});
