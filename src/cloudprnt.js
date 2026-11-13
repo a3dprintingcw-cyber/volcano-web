@@ -9,7 +9,7 @@
 // No database change: what has been printed is kept in the settings table.
 
 import { formatMinutes, localClock } from './hours.js';
-import { kitchenPng, kitchenStarPrnt, receiptPng } from './receipt.js';
+import { kitchenPng, kitchenStarPrnt, receiptPng, receiptStarPrnt } from './receipt.js';
 
 const WIDTH = 48; // characters per line on 80 mm paper
 const PRINTABLE = "status IN ('new','preparing','ready','done')";
@@ -279,7 +279,7 @@ export async function handleCloudPrnt(request, url, db, loadOrders, settings) {
     if (!token) return json({ jobReady: false });
     // Both the kitchen ticket and the customer receipt go as a picture if the printer takes one,
     // otherwise as text. The picture lets the kitchen ticket use large type.
-    const mediaTypes = parseJob(token).kind === 'r' ? ['image/png', 'text/plain'] : ['image/png', 'application/vnd.star.starprnt', 'text/vnd.star.markup', 'text/plain'];
+    const mediaTypes = parseJob(token).kind === 'r' ? ['image/png', 'application/vnd.star.starprnt', 'text/plain'] : ['image/png', 'application/vnd.star.starprnt', 'text/vnd.star.markup', 'text/plain'];
     return json({ jobReady: true, mediaTypes, jobToken: token, deleteMethod: 'DELETE' });
   }
 
@@ -306,6 +306,11 @@ export async function handleCloudPrnt(request, url, db, loadOrders, settings) {
     const offset = settings.timezone_offset_minutes || 0;
     const type = params.get('type') || 'text/plain';
     await putSetting(db, 'cloudprnt_last_get', { at: Date.now(), kind: job.kind, type });
+    if (job.kind === 'r' && type.includes('starprnt')) {
+      return new Response(receiptStarPrnt(order, offset), {
+        headers: { 'content-type': 'application/vnd.star.starprnt', 'cache-control': 'no-store' },
+      });
+    }
     if (job.kind === 'r' && !type.includes('png')) {
       return new Response(receiptText(order, offset), {
         headers: { 'content-type': 'text/plain', 'X-Star-Cut': 'full; feed=true', 'cache-control': 'no-store' },

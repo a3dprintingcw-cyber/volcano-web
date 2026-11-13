@@ -312,10 +312,12 @@ async function deflate(bytes) {
 export const receiptPng = (order, offsetMinutes) => toPng(drawReceipt(order, offsetMinutes));
 export const kitchenPng = (order, offsetMinutes) => toPng(drawKitchenTicket(order, offsetMinutes));
 
-// The kitchen ticket as StarPRNT commands: the same picture sent as raster graphics,
+// Tickets as StarPRNT commands: the picture sent as raster graphics,
 // the printer's own format (what Lightspeed's Star driver sends), then a full cut.
-export function kitchenStarPrnt(order, offsetMinutes) {
-  const { width, height, px } = drawKitchenTicket(order, offsetMinutes);
+export const kitchenStarPrnt = (order, offsetMinutes) => toStarPrnt(drawKitchenTicket(order, offsetMinutes));
+export const receiptStarPrnt = (order, offsetMinutes) => toStarPrnt(drawReceipt(order, offsetMinutes));
+
+function toStarPrnt({ width, height, px }) {
   const rowBytes = Math.ceil(width / 8);
   const parts = [Uint8Array.of(0x1b, 0x40)]; // ESC @ initialise
   const BAND = 200; // lines per raster command

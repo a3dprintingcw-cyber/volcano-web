@@ -68,3 +68,10 @@ test('kitchen ticket as StarPRNT raster: header, full bands, cut', async () => {
   const bands = Math.ceil(height / 200);
   assert.equal(bytes.length, 2 + bands * 9 + 72 * height + 3);
 });
+
+test('customer receipt as StarPRNT raster ends with a cut', async () => {
+  const { receiptStarPrnt } = await import('../src/receipt.js');
+  const bytes = receiptStarPrnt(order, -240);
+  assert.deepEqual([...bytes.slice(0, 5)], [0x1b, 0x40, 0x1b, 0x1d, 0x53]);
+  assert.deepEqual([...bytes.slice(-3)], [0x1b, 0x64, 0x02]);
+});
