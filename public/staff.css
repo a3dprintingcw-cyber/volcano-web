@@ -125,3 +125,7 @@
 @keyframes new-order { 50% { background: var(--magma); color: var(--ink); } }
 @media (prefers-reduced-motion: reduce) { .board.has-new .col:first-child h2 { animation: none; background: var(--magma); color: var(--ink); } }
 .sales-reset { margin-top: 14px; }
+
+/* Kitchen board: which kitchen (Street Food downstairs, Experience on the rooftop) */
+.venue-pick { display: inline-flex; gap: 0.35rem; }
+.venue-pick a.pill { display: inline-flex; align-items: center; text-decoration: none; }

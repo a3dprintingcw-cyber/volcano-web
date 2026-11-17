@@ -92,7 +92,7 @@ export async function notifyOrder(env, orderId) {
 // What the notification should say for an order, by its status.
 export function notificationFor(order, phone) {
   if (order.status === 'ready') {
-    return { title: 'Your order is ready', body: `Order ${order.number} is ready for pickup at Volcano Street Food.` };
+    return { title: 'Your order is ready', body: order.venue === 'rooftop' ? `Order ${order.number} is ready at the rooftop bar.` : `Order ${order.number} is ready for pickup at Volcano Street Food.` };
   }
   if (order.status === 'cancelled') {
     return { title: `Order ${order.number} was cancelled`, body: `Please call us on ${phone} if you have questions.` };

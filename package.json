@@ -12,6 +12,9 @@
     "menu:build": "node scripts/build-seed.mjs",
     "menu:reload:local": "npm run menu:build && wrangler d1 execute DB --local --file=db/seed.sql",
     "menu:reload:remote": "npm run menu:build && wrangler d1 execute DB --remote --file=db/seed.sql",
+    "rooftop:build": "node scripts/build-rooftop.mjs",
+    "rooftop:reload:local": "npm run rooftop:build && wrangler d1 execute DB --local --file=db/rooftop-seed.sql",
+    "rooftop:reload:remote": "npm run rooftop:build && wrangler d1 execute DB --remote --file=db/rooftop-seed.sql",
     "deploy": "wrangler d1 migrations apply DB --remote && wrangler deploy"
   },
   "devDependencies": {

@@ -297,3 +297,16 @@ pre.report { background: var(--panel-2); border-radius: 0.7rem; padding: 0.8rem;
 }
 .kpi { align-content: start; }
 @media (max-width: 40rem) { .tbl .hide-m { display: none; } .tbl td, .tbl th { padding-left: 0.4rem; padding-right: 0.4rem; } }
+
+/* ---------- venue picker: Volcano Street Food (downstairs) or Volcano Experience (rooftop) ---------- */
+.venue-seg { display: grid; grid-template-columns: 1fr 1fr; gap: 0.25rem; padding: 0.25rem; margin: 0 0 1rem; background: var(--panel); border: 1px solid var(--line); border-radius: 0.8rem; }
+.venue-seg button { display: grid; justify-items: center; line-height: 1.15; padding: 0.45rem 0.4rem; border: 0; border-radius: 0.6rem; background: transparent; color: var(--quiet); }
+.venue-seg b { font-family: var(--display); font-weight: 400; font-size: 0.82rem; }
+.venue-seg small { font-size: 0.72rem; }
+.venue-seg button.is-on { background: var(--gold); color: #1b1512; }
+.venue-seg button:not(.is-on):hover { color: var(--text); }
+.venue-tag { display: inline-block; vertical-align: middle; margin-left: 0.4rem; padding: 0.2rem 0.6rem; border-radius: 999px; background: var(--panel-2); border: 1px solid var(--line); color: var(--gold); font-family: var(--body, inherit); font-size: 0.8rem; font-weight: 600; letter-spacing: 0; text-transform: none; }
+@media (max-width: 61.99rem) {
+  .venue-seg { margin: 0 0.4rem 0 0; flex: none; }
+  .venue-seg small { display: none; }
+}

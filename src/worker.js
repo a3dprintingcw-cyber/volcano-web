@@ -79,9 +79,57 @@ const cleanText = (value, max) =>
 
 const visitor = (request) => request.headers.get('cf-connecting-ip') || 'local';
 
+// ---------- venues ----------
+
+// Two places to order from, one kitchen system: "street" (Volcano Street Food, downstairs)
+// and "rooftop" (Volcano Experience, the sushi rooftop). Each has its own menu sections,
+// opening hours, wait time, switches, kitchen board and printer.
+const VENUES = ['street', 'rooftop'];
+const venueOf = (value) => (value === 'rooftop' ? 'rooftop' : 'street');
+const VENUE_NAMES = { street: 'Volcano Street Food', rooftop: 'Volcano Experience' };
+// The rooftop keeps these under the settings key "rooftop". Everything else is shared.
+const VENUE_KEYS = ['hours', 'prep_minutes', 'last_order_minutes_before_close', 'ordering_paused', 'paused_message', 'busy_day', 'closed_day'];
+
+// Saves one setting for one venue.
+async function putVenueSetting(db, venue, key, value) {
+  if (venueOf(venue) === 'street') {
+    await db
+      .prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value')
+      .bind(key, JSON.stringify(value))
+      .run();
+    return;
+  }
+  await putVenueSettings(db, 'rooftop', { [key]: value });
+}
+
+async function putVenueSettings(db, venue, changes) {
+  const entries = Object.entries(changes);
+  if (venueOf(venue) === 'street') {
+    await db.batch(
+      entries.map(([key, value]) =>
+        db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value').bind(key, JSON.stringify(value))
+      )
+    );
+    return;
+  }
+  // One JSON object: read it, change it, write it back.
+  const row = await db.prepare("SELECT value FROM settings WHERE key = 'rooftop'").first();
+  let current = {};
+  try {
+    current = row ? JSON.parse(row.value) || {} : {};
+  } catch {
+    current = {};
+  }
+  for (const [key, value] of entries) if (VENUE_KEYS.includes(key)) current[key] = value;
+  await db
+    .prepare("INSERT INTO settings (key, value) VALUES ('rooftop', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value")
+    .bind(JSON.stringify(current))
+    .run();
+}
+
 // ---------- settings ----------
 
-async function loadSettings(db) {
+async function loadSettings(db, venue = 'street') {
   const { results } = await db.prepare('SELECT key, value FROM settings').all();
   const settings = {};
   for (const row of results) {
@@ -93,6 +141,15 @@ async function loadSettings(db) {
   }
   // Two switches last for one service day only, so nobody has to remember to undo them:
   // "busy" adds time to the wait, "closed today" stops orders for the day.
+  settings.venue = venueOf(venue);
+  if (settings.venue === 'rooftop') {
+    const own = settings.rooftop && typeof settings.rooftop === 'object' ? settings.rooftop : {};
+    // Hours and times fall back to downstairs until the rooftop has its own.
+    // The switches (paused, busy, closed today) never carry over from downstairs.
+    const off = { ordering_paused: false, paused_message: '', busy_day: '', closed_day: '' };
+    for (const key of VENUE_KEYS) settings[key] = key in own ? own[key] : key in off ? off[key] : settings[key];
+    settings.restaurant_name = VENUE_NAMES.rooftop;
+  }
   const today = localClock(Date.now(), settings.timezone_offset_minutes || 0).date;
   settings.prep_base = settings.prep_minutes;
   settings.busy = settings.busy_day === today;
@@ -111,9 +168,9 @@ const photoUrls = (image) => {
   return { small: `/img/${image}-420.webp`, large: `/img/${image}-900.webp` };
 };
 
-async function loadMenu(db, { withArchived = false } = {}) {
+async function loadMenu(db, { withArchived = false, venue = null } = {}) {
   const [cats, items, groups, options] = await db.batch([
-    db.prepare('SELECT * FROM categories ORDER BY sort'),
+    venue ? db.prepare('SELECT * FROM categories WHERE venue = ? ORDER BY sort').bind(venueOf(venue)) : db.prepare('SELECT * FROM categories ORDER BY sort'),
     db.prepare(`SELECT * FROM items ${withArchived ? '' : 'WHERE archived = 0'} ORDER BY category_id, sort`),
     db.prepare('SELECT * FROM option_groups ORDER BY item_id, sort'),
     db.prepare('SELECT * FROM options ORDER BY group_id, sort'),
@@ -173,6 +230,7 @@ async function loadMenu(db, { withArchived = false } = {}) {
     slug: c.slug,
     name: c.name,
     note: c.note,
+    venue: c.venue || 'street',
     items: itemsByCat.get(c.id) || [],
   }));
 }
@@ -180,18 +238,18 @@ async function loadMenu(db, { withArchived = false } = {}) {
 // Best sellers of the last 30 days, for the "Popular" section.
 // Shown only once there are enough real orders for it to mean something.
 const POPULAR = { minOrders: 20, show: 6, days: 30 };
-async function popularItems(db, settings, menu) {
+async function popularItems(db, settings, menu, venue = 'street') {
   const clock = localClock(Date.now(), settings.timezone_offset_minutes);
   const since = new Date(Date.parse(`${clock.date}T00:00:00Z`) - (POPULAR.days - 1) * 86_400_000).toISOString().slice(0, 10);
   const counted = "o.status IN ('new','preparing','ready','done')";
   const [orders, top] = await db.batch([
-    db.prepare(`SELECT COUNT(*) AS n FROM orders o WHERE ${counted} AND o.service_day >= ? AND o.created_at >= ?`).bind(since, settings.sales_since || 0),
+    db.prepare(`SELECT COUNT(*) AS n FROM orders o WHERE ${counted} AND o.venue = ? AND o.service_day >= ? AND o.created_at >= ?`).bind(venueOf(venue), since, settings.sales_since || 0),
     db
       .prepare(
         `SELECT oi.item_id AS id, SUM(oi.quantity) AS quantity FROM order_items oi JOIN orders o ON o.id = oi.order_id
-         WHERE ${counted} AND o.service_day >= ? AND o.created_at >= ? AND oi.item_id IS NOT NULL GROUP BY oi.item_id ORDER BY quantity DESC LIMIT 30`
+         WHERE ${counted} AND o.venue = ? AND o.service_day >= ? AND o.created_at >= ? AND oi.item_id IS NOT NULL GROUP BY oi.item_id ORDER BY quantity DESC LIMIT 30`
       )
-      .bind(since, settings.sales_since || 0),
+      .bind(venueOf(venue), since, settings.sales_since || 0),
   ]);
   if (orders.results[0].n < POPULAR.minOrders) return [];
   // Dishes only: drinks and sides sell the most everywhere and tell nobody anything.
@@ -203,6 +261,7 @@ async function popularItems(db, settings, menu) {
 
 function publicInfo(settings, env) {
   return {
+    venue: settings.venue || 'street',
     restaurant_name: settings.restaurant_name,
     phone: settings.phone,
     hours: describeHours(settings.hours),
@@ -310,7 +369,10 @@ async function createOrder(request, env) {
     throw new HttpError(400, 'Online payment is not available right now. Please choose to pay at pickup.');
   }
 
-  const [settings, menu] = await Promise.all([loadSettings(db), loadMenu(db)]);
+  // Downstairs or the rooftop. The menu, hours and switches of that venue apply,
+  // so a dish from the other menu cannot end up in this order.
+  const venue = venueOf(body.venue);
+  const [settings, menu] = await Promise.all([loadSettings(db, venue), loadMenu(db, { venue })]);
   const avail = availability(settings, Date.now());
   if (!avail.can_order) throw new HttpError(409, avail.message);
 
@@ -353,8 +415,8 @@ async function createOrder(request, env) {
       await db.batch([
         db
           .prepare(
-            `INSERT INTO orders (id, number, service_day, status, customer_name, phone, notes, pickup_type, pickup_at, total_cents, payment_method, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+            `INSERT INTO orders (id, number, service_day, status, customer_name, phone, notes, pickup_type, pickup_at, total_cents, payment_method, created_at, updated_at, venue)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
           )
           .bind(
             id,
@@ -370,7 +432,8 @@ async function createOrder(request, env) {
             total,
             payOnline ? 'sentoo' : pickupMethod,
             created,
-            created
+            created,
+            venue
           ),
         ...lines.map((l) =>
           db
@@ -382,7 +445,7 @@ async function createOrder(request, env) {
       ]);
       await recordEvent(db, 'order', who);
       if (!payOnline) return json({ id, number: next.n }, 201);
-      return startPayment(request, env, { id, number: next.n, total, created, offsetMinutes: settings.timezone_offset_minutes });
+      return startPayment(request, env, { id, number: next.n, total, created, offsetMinutes: settings.timezone_offset_minutes, venue });
     } catch (err) {
       if (!String(err && err.message).includes('UNIQUE')) throw err;
     }
@@ -392,12 +455,12 @@ async function createOrder(request, env) {
 
 // ---------- online payment (Sentoo) ----------
 
-async function startPayment(request, env, { id, number, total, created, offsetMinutes }) {
+async function startPayment(request, env, { id, number, total, created, offsetMinutes, venue = 'street' }) {
   const db = env.DB;
   try {
     const payment = await createPayment(env, {
       amountCents: total,
-      description: `Volcano Street Food order ${number}`,
+      description: `${VENUE_NAMES[venueOf(venue)]} order ${number}`,
       // Sentoo adds the payment attempt status to the end of this address.
       returnUrl: `${new URL(request.url).origin}/order?id=${id}&attempt=`,
       customer: `Order ${number}`,
@@ -445,7 +508,7 @@ async function syncPayment(env, order, kind) {
     .bind(payment.state, payment.attempt, payment.message, at, order.id);
 
   if (payment.state === 'success') {
-    const settings = await loadSettings(db);
+    const settings = await loadSettings(db, order.venue);
     await db.batch([
       record,
       db.prepare("UPDATE orders SET payment_status = 'paid' WHERE id = ?").bind(order.id),
@@ -568,7 +631,7 @@ async function salesSummary(db, settings) {
   const counted = "status IN ('new','preparing','ready','done')";
   // Orders from before this moment (demos, tests) are not counted.
   const since = settings.sales_since || 0;
-  const [days, top, cancelled] = await db.batch([
+  const [days, top, cancelled, venues] = await db.batch([
     db
       .prepare(
         `SELECT service_day AS day, COUNT(*) AS orders, SUM(total_cents) AS total_cents,
@@ -586,12 +649,20 @@ async function salesSummary(db, settings) {
       )
       .bind(daysAgo(29), since),
     db.prepare("SELECT COUNT(*) AS n FROM orders WHERE status = 'cancelled' AND cancelled_by != 'payment' AND service_day = ? AND created_at >= ?").bind(clock.date, since),
+    // Today split by downstairs and rooftop.
+    db
+      .prepare(`SELECT venue, COUNT(*) AS orders, SUM(total_cents) AS total_cents FROM orders WHERE ${counted} AND service_day = ? AND created_at >= ? GROUP BY venue`)
+      .bind(clock.date, since),
   ]);
   const today = days.results.find((d) => d.day === clock.date) || { day: clock.date, orders: 0, total_cents: 0, online_cents: 0, cash_cents: 0, card_cents: 0 };
   return {
     today: { ...today, cancelled: cancelled.results[0].n, average_cents: today.orders ? Math.round(today.total_cents / today.orders) : 0 },
     days: days.results,
     top_items: top.results,
+    venues: Object.fromEntries(VENUES.map((v) => {
+      const row = venues.results.find((r) => r.venue === v);
+      return [v, { orders: row ? row.orders : 0, total_cents: row ? row.total_cents : 0 }];
+    })),
   };
 }
 
@@ -622,6 +693,7 @@ async function loadOrders(db, where, binds) {
 // What a customer may see about their own order.
 const customerView = (o) => ({
   id: o.id,
+  venue: o.venue || 'street',
   number: o.number,
   status: o.status,
   customer_name: o.customer_name,
@@ -652,7 +724,9 @@ const customerView = (o) => ({
 const encoder = new TextEncoder();
 const toHex = (buffer) => [...new Uint8Array(buffer)].map((b) => b.toString(16).padStart(2, '0')).join('');
 
-const printerKey = async (env) => (await hmac(env.SESSION_SECRET, 'cloudprnt-v1')).slice(0, 32);
+// Each printer has its own secret link: the street food one as before, the rooftop one apart.
+const printerKey = async (env, venue = 'street') =>
+  (await hmac(env.SESSION_SECRET, venueOf(venue) === 'rooftop' ? 'cloudprnt-rooftop-v1' : 'cloudprnt-v1')).slice(0, 32);
 
 async function hmac(secret, message) {
   const key = await crypto.subtle.importKey('raw', encoder.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
@@ -794,6 +868,9 @@ function validateSettings(input, current) {
   return { ...current, ...next, _changed: next };
 }
 
+// What the manager may change for the rooftop. Phone and report email are shared and set on the street food side.
+const ROOFTOP_EDITABLE = ['ordering_paused', 'paused_message', 'prep_minutes', 'last_order_minutes_before_close', 'hours'];
+
 // ---------- routing ----------
 
 async function handleApi(request, env, url, ctx) {
@@ -804,18 +881,21 @@ async function handleApi(request, env, url, ctx) {
 
   // The kitchen's Star printer (CloudPRNT). The secret part of the link is derived from SESSION_SECRET.
   if ((match = path.match(/^\/api\/cloudprnt\/([a-f0-9]{32})$/))) {
-    if (match[1] !== (await printerKey(env))) return json({ error: 'Not found' }, 404);
-    return handleCloudPrnt(request, url, db, loadOrders, await loadSettings(db));
+    for (const venue of VENUES) {
+      if (match[1] === (await printerKey(env, venue))) return handleCloudPrnt(request, url, db, loadOrders, await loadSettings(db, venue), venue);
+    }
+    return json({ error: 'Not found' }, 404);
   }
 
   // Public
   if (path === '/api/menu' && method === 'GET') {
-    const [settings, menu] = await Promise.all([loadSettings(db), loadMenu(db)]);
+    const venue = venueOf(url.searchParams.get('venue'));
+    const [settings, menu] = await Promise.all([loadSettings(db, venue), loadMenu(db, { venue })]);
     return json({
       info: publicInfo(settings, env),
       availability: availability(settings, Date.now()),
       menu,
-      popular: await popularItems(db, settings, menu),
+      popular: await popularItems(db, settings, menu, venue),
     });
   }
   if ((match = path.match(/^\/api\/photos\/([0-9a-f-]{36})\/(small|large)$/)) && method === 'GET') {
@@ -839,7 +919,7 @@ async function handleApi(request, env, url, ctx) {
   if ((match = path.match(/^\/api\/orders\/([0-9a-f-]{36})$/)) && method === 'GET') {
     const [order] = await loadOrders(db, 'id = ?', [match[1]]);
     if (!order) throw new HttpError(404, 'We could not find that order.');
-    const settings = await loadSettings(db);
+    const settings = await loadSettings(db, order.venue);
     return json({ order: customerView(order), info: publicInfo(settings, env) });
   }
   // The order page asks us to confirm the payment with Sentoo. How often we really
@@ -854,7 +934,7 @@ async function handleApi(request, env, url, ctx) {
     } catch (err) {
       console.error('Sentoo status check failed', err.message);
     }
-    const settings = await loadSettings(db);
+    const settings = await loadSettings(db, order.venue);
     return json({ order: customerView(order), info: publicInfo(settings, env) });
   }
   if (path === '/api/sentoo/webhook' && method === 'POST') return sentooWebhook(request, env);
@@ -882,7 +962,7 @@ async function handleApi(request, env, url, ctx) {
     const body = await readJson(request);
     const order = await db
       .prepare(
-        `SELECT o.id, o.number, o.status FROM push_subscriptions p JOIN orders o ON o.id = p.order_id
+        `SELECT o.id, o.number, o.status, o.venue FROM push_subscriptions p JOIN orders o ON o.id = p.order_id
          WHERE p.endpoint = ? AND o.status IN ('ready', 'cancelled') ORDER BY o.updated_at DESC LIMIT 1`
       )
       .bind(String(body.endpoint || ''))
@@ -894,7 +974,7 @@ async function handleApi(request, env, url, ctx) {
   if ((match = path.match(/^\/api\/orders\/([0-9a-f-]{36})\/cancel$/)) && method === 'POST') {
     await customerCancel(env, match[1]);
     const [order] = await loadOrders(db, 'id = ?', [match[1]]);
-    const settings = await loadSettings(db);
+    const settings = await loadSettings(db, order.venue);
     return json({ order: customerView(order), info: publicInfo(settings, env) });
   }
 
@@ -928,16 +1008,19 @@ async function handleApi(request, env, url, ctx) {
   // Kitchen board
   if (path === '/api/staff/orders' && method === 'GET') {
     await requireRole(request, env, 'staff');
-    const settings = await loadSettings(db);
+    // Each kitchen board shows one venue: downstairs (default) or the rooftop (?venue=rooftop).
+    const venue = venueOf(url.searchParams.get('venue'));
+    const settings = await loadSettings(db, venue);
     const clock = localClock(Date.now(), settings.timezone_offset_minutes);
     // Everything from today's service, plus anything still open from before.
     // Orders still waiting for an online payment are not the kitchen's business yet.
     const orders = await loadOrders(
       db,
-      "(service_day = ? OR status IN ('new','preparing','ready')) AND status != 'awaiting_payment'",
-      [clock.date]
+      "venue = ? AND (service_day = ? OR status IN ('new','preparing','ready')) AND status != 'awaiting_payment'",
+      [venue, clock.date]
     );
     return json({
+      venue,
       orders,
       service_day: clock.date,
       ordering_paused: Boolean(settings.ordering_paused),
@@ -954,9 +1037,10 @@ async function handleApi(request, env, url, ctx) {
   if ((match = path.match(/^\/api\/staff\/orders\/([0-9a-f-]{36})\/reprint$/)) && method === 'POST') {
     await requireRole(request, env, 'staff');
     const body = await readJson(request);
-    const order = await db.prepare('SELECT id FROM orders WHERE id = ?').bind(match[1]).first();
+    const order = await db.prepare('SELECT id, venue FROM orders WHERE id = ?').bind(match[1]).first();
     if (!order) return json({ error: 'Order not found.' }, 404);
-    await queueReprint(db, order.id, body.kind === 'receipt' ? 'r' : 'k');
+    // Reprints go to the printer of the venue the order belongs to.
+    await queueReprint(db, order.id, body.kind === 'receipt' ? 'r' : 'k', order.venue);
     return json({ ok: true });
   }
   if ((match = path.match(/^\/api\/staff\/orders\/([0-9a-f-]{36})$/)) && method === 'PATCH') {
@@ -987,33 +1071,26 @@ async function handleApi(request, env, url, ctx) {
   // The kitchen sets how long orders take right now, so customers get an honest pickup time.
   if (path === '/api/staff/prep' && method === 'POST') {
     await requireRole(request, env, 'staff');
-    const minutes = Number((await readJson(request)).minutes);
+    const body = await readJson(request);
+    const minutes = Number(body.minutes);
     if (!Number.isInteger(minutes) || minutes < 5 || minutes > 120) throw new HttpError(400, 'Choose a wait time between 5 and 120 minutes.');
-    await db
-      .prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value')
-      .bind('prep_minutes', JSON.stringify(minutes))
-      .run();
+    await putVenueSetting(db, body.venue, 'prep_minutes', minutes);
     return json({ ok: true, prep_minutes: minutes });
   }
   // One-day switches: "busy" (longer wait) and "closed today". Both end by themselves at midnight.
   if ((match = path.match(/^\/api\/staff\/(busy|closed)$/)) && method === 'POST') {
     await requireRole(request, env, 'staff');
-    const on = Boolean((await readJson(request)).on);
+    const body = await readJson(request);
+    const on = Boolean(body.on);
     const settings = await loadSettings(db);
     const today = localClock(Date.now(), settings.timezone_offset_minutes).date;
-    await db
-      .prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value')
-      .bind(match[1] === 'busy' ? 'busy_day' : 'closed_day', JSON.stringify(on ? today : ''))
-      .run();
+    await putVenueSetting(db, body.venue, match[1] === 'busy' ? 'busy_day' : 'closed_day', on ? today : '');
     return json({ ok: true, on });
   }
   if (path === '/api/staff/pause' && method === 'POST') {
     await requireRole(request, env, 'staff');
     const body = await readJson(request);
-    await db
-      .prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value')
-      .bind('ordering_paused', JSON.stringify(Boolean(body.paused)))
-      .run();
+    await putVenueSetting(db, body.venue, 'ordering_paused', Boolean(body.paused));
     return json({ ok: true, ordering_paused: Boolean(body.paused) });
   }
   // Marking something sold out is a kitchen job, so the staff PIN is enough.
@@ -1025,9 +1102,16 @@ async function handleApi(request, env, url, ctx) {
   }
   if (path === '/api/staff/menu' && method === 'GET') {
     const role = await requireRole(request, env, 'staff');
-    const [settings, menu] = await Promise.all([loadSettings(db), loadMenu(db, { withArchived: true })]);
+    const [settings, rooftop, menu] = await Promise.all([loadSettings(db), loadSettings(db, 'rooftop'), loadMenu(db, { withArchived: true })]);
+    // The rooftop's own hours and switches, as the rooftop board and admin page need them.
+    const rooftopView = Object.fromEntries([...VENUE_KEYS, 'busy', 'closed_today', 'prep_base'].map((k) => [k, rooftop[k]]));
     // Who receives the sales report is the manager's business only.
-    return json({ role, menu, settings: role === 'admin' ? settings : { ...settings, report_email: undefined }, report_ready: reportReady(env) });
+    return json({
+      role,
+      menu,
+      settings: { ...(role === 'admin' ? settings : { ...settings, report_email: undefined }), rooftop: rooftopView },
+      report_ready: reportReady(env),
+    });
   }
 
   // Manager only
@@ -1102,7 +1186,12 @@ async function handleApi(request, env, url, ctx) {
   // Where the kitchen printer should look for orders, and when it last did.
   if (path === '/api/admin/printer' && method === 'GET') {
     await requireRole(request, env, 'admin');
-    return json({ url: `${url.origin}/api/cloudprnt/${await printerKey(env)}`, ...(await printerStatus(db)) });
+    return json({
+      url: `${url.origin}/api/cloudprnt/${await printerKey(env)}`,
+      ...(await printerStatus(db)),
+      // The rooftop's own printer: a second Star printer with its own link.
+      rooftop: { url: `${url.origin}/api/cloudprnt/${await printerKey(env, 'rooftop')}`, ...(await printerStatus(db, 'rooftop')) },
+    });
   }
   if (path === '/api/admin/sales' && method === 'GET') {
     await requireRole(request, env, 'admin');
@@ -1153,8 +1242,17 @@ async function handleApi(request, env, url, ctx) {
   }
   if (path === '/api/admin/settings' && method === 'PUT') {
     await requireRole(request, env, 'admin');
+    const body = await readJson(request);
+    if (body.venue === 'rooftop') {
+      const current = await loadSettings(db, 'rooftop');
+      const input = Object.fromEntries(Object.entries(body).filter(([k]) => ROOFTOP_EDITABLE.includes(k)));
+      const { _changed: changed } = validateSettings(input, current);
+      if (Object.keys(changed).length === 0) throw new HttpError(400, 'Nothing to change.');
+      await putVenueSettings(db, 'rooftop', changed);
+      return json({ ok: true, settings: await loadSettings(db, 'rooftop') });
+    }
     const current = await loadSettings(db);
-    const { _changed: changed } = validateSettings(await readJson(request), current);
+    const { _changed: changed } = validateSettings(body, current);
     const entries = Object.entries(changed);
     if (entries.length === 0) throw new HttpError(400, 'Nothing to change.');
     await db.batch(

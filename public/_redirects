@@ -3,3 +3,7 @@
 /TV /sushi/tv/?screen=portrait&rotate=90 302
 /tv2 /sushi/tv/?screen=portrait&rotate=270 302
 /tvw /sushi/tv/ 302
+
+# The rooftop (Volcano Experience): straight to the sushi ordering menu.
+/rooftop /?venue=rooftop 302
+/experience /?venue=rooftop 302

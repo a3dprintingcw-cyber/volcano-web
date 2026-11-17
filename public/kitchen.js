@@ -2,6 +2,23 @@
 import { api, clockTime, esc, money, store } from '/shared.js';
 import { requireStaff, signOut } from '/staff-login.js';
 
+// Which kitchen this screen is: Volcano Street Food (downstairs) or Volcano Experience (rooftop).
+// Open /kitchen/?venue=rooftop once on the rooftop screen: it then stays the rooftop board.
+const VENUE_KEY = 'volcano_kitchen_venue';
+const VENUE_LABEL = { street: 'Volcano Street Food', rooftop: 'Volcano Experience' };
+const VENUE = (() => {
+  const asked = new URLSearchParams(location.search).get('venue');
+  let v = asked === 'rooftop' || asked === 'street' ? asked : null;
+  try {
+    if (v) localStorage.setItem(VENUE_KEY, v);
+    else v = localStorage.getItem(VENUE_KEY);
+  } catch {
+    /* private mode: the address decides */
+  }
+  return v === 'rooftop' ? 'rooftop' : 'street';
+})();
+
+
 const app = document.getElementById('app');
 const COLUMNS = [
   { status: 'new', title: 'New', empty: 'No new orders.', next: 'preparing', action: 'Start cooking' },
@@ -130,10 +147,14 @@ function render() {
   const taken = finished.filter((o) => o.status === 'done');
   // The browser tab shows how many new orders are waiting.
   const fresh = data.orders.filter((o) => o.status === 'new').length;
-  document.title = `${fresh ? `(${fresh}) ` : ''}Kitchen board | Volcano Street Food`;
+  document.title = `${fresh ? `(${fresh}) ` : ''}Kitchen board | ${VENUE_LABEL[VENUE]}`;
   app.innerHTML = `
     <header class="staff-bar">
       <h1>Kitchen board</h1>
+      <span class="venue-pick" role="group" aria-label="Which kitchen">
+        <a class="pill ${VENUE === 'street' ? 'is-on' : ''}" href="/kitchen/?venue=street" aria-current="${VENUE === 'street'}">Street Food</a>
+        <a class="pill ${VENUE === 'rooftop' ? 'is-on' : ''}" href="/kitchen/?venue=rooftop" aria-current="${VENUE === 'rooftop'}">Experience (rooftop)</a>
+      </span>
       <button class="pill ${data.ordering_paused ? 'is-warn' : ''}" type="button" data-pause="${data.ordering_paused ? '0' : '1'}" aria-pressed="${data.ordering_paused}">
         ${data.ordering_paused ? 'Online orders paused. Tap to resume' : 'Pause online orders'}
       </button>
@@ -146,7 +167,7 @@ function render() {
         ${data.busy ? `Busy: +${data.busy_extra} min. Tap to end` : `Busy: +${data.busy_extra} min`}
       </button>
       <button class="pill ${state.sound ? 'is-on' : ''}" type="button" data-sound aria-pressed="${state.sound}">Sound ${state.sound ? 'on' : 'off'}</button>
-      <a href="/admin/">Manager page</a>
+      <a href="/admin/?venue=${VENUE}">Manager page</a>
       <button class="pill" type="button" data-signout>Sign out</button>
     </header>
     ${
@@ -226,7 +247,7 @@ async function reprint(id, kind) {
 
 async function refresh() {
   try {
-    const data = await api('/api/staff/orders');
+    const data = await api(`/api/staff/orders?venue=${VENUE}`);
     const ids = new Set(data.orders.filter((o) => o.status === 'new').map((o) => o.id));
     if (state.seen) {
       const arrived = [...ids].filter((id) => !state.seen.has(id));
@@ -270,13 +291,13 @@ app.addEventListener('click', (event) => {
   }
   if (target.dataset.prep) {
     const minutes = Math.min(120, Math.max(5, state.data.prep_base + Number(target.dataset.prep)));
-    return act(() => api('/api/staff/prep', { method: 'POST', body: { minutes } }));
+    return act(() => api('/api/staff/prep', { method: 'POST', body: { minutes, venue: VENUE } }));
   }
   if ('busy' in target.dataset) {
-    return act(() => api('/api/staff/busy', { method: 'POST', body: { on: target.dataset.busy === '1' } }));
+    return act(() => api('/api/staff/busy', { method: 'POST', body: { on: target.dataset.busy === '1', venue: VENUE } }));
   }
   if ('pause' in target.dataset) {
-    return act(() => api('/api/staff/pause', { method: 'POST', body: { paused: target.dataset.pause === '1' } }));
+    return act(() => api('/api/staff/pause', { method: 'POST', body: { paused: target.dataset.pause === '1', venue: VENUE } }));
   }
   if (!id) return;
   if (target.dataset.reprint) return reprint(id, target.dataset.reprint);

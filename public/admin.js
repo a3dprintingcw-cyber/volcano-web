@@ -118,9 +118,48 @@ const state = {
   confirmReset: false,
 };
 const range = () => rangeFor(state.preset, state.custom);
+
+// ---------- which venue: Volcano Street Food (downstairs) or Volcano Experience (rooftop) ----------
+// One manager page for both. The picker at the top decides what every section shows.
+const VENUES = { street: 'Volcano Street Food', rooftop: 'Volcano Experience' };
+state.venue = (() => {
+  const asked = new URLSearchParams(location.search).get('venue');
+  if (asked === 'street' || asked === 'rooftop') return asked;
+  return store.get('volcano_admin_venue', 'street') === 'rooftop' ? 'rooftop' : 'street';
+})();
+const vq = () => `venue=${state.venue}`;
+const isRoof = () => state.venue === 'rooftop';
+// The hours and switches of the chosen venue. Phone and report email are shared.
+const vs = () => (isRoof() ? { ...state.menu.settings, ...state.menu.settings.rooftop } : state.menu.settings);
+const setVs = (key, value) => {
+  if (isRoof()) state.menu.settings.rooftop[key] = value;
+  else state.menu.settings[key] = value;
+};
+// Menu sections of the chosen venue only.
+const venueMenu = () => state.menu.menu.filter((c) => (c.venue || 'street') === state.venue);
+
+async function switchVenue(venue) {
+  if (venue === state.venue) return;
+  state.venue = venue;
+  store.set('volcano_admin_venue', venue);
+  const url = new URL(location.href);
+  url.searchParams.set('venue', venue);
+  history.replaceState(null, '', url);
+  // Everything shown so far belongs to the other venue.
+  state.stats = null;
+  state.statsKey = '';
+  state.orders = { q: '', status: '', list: [], total: 0, total_cents: 0, key: '', open: null };
+  state.customers = null;
+  state.customersKey = '';
+  state.menuFilter = 'all';
+  state.addOpen = false;
+  render();
+  await loadBase().catch(() => {});
+  return loadSection(true);
+}
 const rangeKey = () => {
   const r = range();
-  return `${r.from}_${r.to}`;
+  return `${state.venue}_${r.from}_${r.to}`;
 };
 const rangeLabel = () => {
   const r = range();
@@ -161,7 +200,7 @@ async function loadBase() {
   const [menu, printer, kitchen] = await Promise.all([
     api('/api/staff/menu'),
     api('/api/admin/printer').catch(() => null),
-    api('/api/staff/orders').catch(() => null),
+    api(`/api/staff/orders?${vq()}`).catch(() => null),
   ]);
   // The manager sign-in lasts a few hours. Once it ends, ask for the manager PIN again.
   if (menu.role !== 'admin') return location.reload();
@@ -176,7 +215,7 @@ async function loadStats(force = false) {
   state.loading = true;
   render();
   try {
-    state.stats = await api(`/api/admin/stats?from=${r.from}&to=${r.to}`);
+    state.stats = await api(`/api/admin/stats?from=${r.from}&to=${r.to}&${vq()}`);
     state.statsKey = key;
   } catch (err) {
     if (err.status === 401 || err.status === 403) return location.reload();
@@ -190,7 +229,7 @@ async function loadOrders(more = false) {
   const key = `${rangeKey()}|${o.q}|${o.status}`;
   if (!more && o.key === key) return;
   const offset = more ? o.list.length : 0;
-  const data = await api(`/api/admin/orders?from=${r.from}&to=${r.to}&q=${encodeURIComponent(o.q)}&status=${o.status}&offset=${offset}&limit=50`);
+  const data = await api(`/api/admin/orders?from=${r.from}&to=${r.to}&q=${encodeURIComponent(o.q)}&status=${o.status}&offset=${offset}&limit=50&${vq()}`);
   o.list = more ? [...o.list, ...data.orders] : data.orders;
   o.total = data.total;
   o.total_cents = data.total_cents;
@@ -200,7 +239,7 @@ async function loadCustomers() {
   const key = rangeKey();
   if (state.customers && state.customersKey === key) return;
   const r = range();
-  state.customers = (await api(`/api/admin/customers?from=${r.from}&to=${r.to}`)).customers;
+  state.customers = (await api(`/api/admin/customers?from=${r.from}&to=${r.to}&${vq()}`)).customers;
   state.customersKey = key;
 }
 async function loadSection(force = false) {
@@ -222,6 +261,10 @@ function render() {
   app.innerHTML = `<div class="shell">
     <aside class="side">
       <a class="brand" href="#overview" data-go="overview"><img src="/img/icon-180.png" alt=""><span><b>Volcano</b><small>Manager</small></span></a>
+      <div class="venue-seg" role="group" aria-label="Which venue">
+        <button type="button" data-venue="street" class="${state.venue === 'street' ? 'is-on' : ''}" aria-pressed="${state.venue === 'street'}"><b>Street Food</b><small>Downstairs</small></button>
+        <button type="button" data-venue="rooftop" class="${state.venue === 'rooftop' ? 'is-on' : ''}" aria-pressed="${state.venue === 'rooftop'}"><b>Experience</b><small>Rooftop</small></button>
+      </div>
       <nav class="nav" aria-label="Sections">
         ${groups
           .map(
@@ -232,8 +275,8 @@ function render() {
           .join('')}
       </nav>
       <div class="side-foot">
-        <a href="/kitchen/">${icon('kitchen')}<span>Kitchen board</span></a>
-        <a href="/" target="_blank" rel="noopener">${icon('site')}<span>Website</span></a>
+        <a href="/kitchen/?${vq()}">${icon('kitchen')}<span>Kitchen board</span></a>
+        <a href="${isRoof() ? '/?venue=rooftop' : '/'}" target="_blank" rel="noopener">${icon('site')}<span>Website</span></a>
         <button type="button" data-signout>${icon('out')}<span>Sign out</span></button>
       </div>
     </aside>
@@ -245,7 +288,7 @@ function render() {
 function head(title, intro = '') {
   const ranged = RANGED.has(state.section);
   return `<header class="head">
-      <h1>${esc(title)}</h1>
+      <h1>${esc(title)} <span class="venue-tag">${VENUES[state.venue]}</span></h1>
       ${ranged ? rangePicker() : ''}
       <p>${ranged ? `${esc(rangeLabel())}${intro ? `. ${esc(intro)}` : ''}` : esc(intro)}</p>
     </header>
@@ -320,11 +363,11 @@ function mainChart(s) {
 
 function liveStrip() {
   const k = state.kitchen;
-  const settings = state.menu.settings;
+  const settings = vs();
   const a = k?.availability;
   const counts = { new: 0, preparing: 0, ready: 0 };
   for (const o of k?.orders || []) if (counts[o.status] !== undefined) counts[o.status] += 1;
-  const p = state.printer;
+  const p = state.printer && (isRoof() ? state.printer.rooftop : state.printer);
   const seen = p?.last_seen ? Math.round((Date.now() - p.last_seen) / 60000) : null;
   const live = state.stats?.visitors.live ?? 0;
   return `<div class="live">
@@ -617,7 +660,7 @@ function customersView() {
 
 // ---------- menu ----------
 function menuView() {
-  const { menu } = state.menu;
+  const menu = venueMenu();
   const q = state.menuSearch.trim().toLowerCase();
   const cats = menu.filter((c) => state.menuFilter === 'all' || state.menuFilter === 'out' || String(c.id) === state.menuFilter);
   const allItems = menu.flatMap((c) => c.items).filter((i) => !i.archived);
@@ -693,7 +736,7 @@ function dishCard(item) {
 function addDishForm() {
   return `<section class="card-p"><h2>Add a dish</h2><p class="sub">You can add a photo after the dish is saved.</p>
     <form class="form" id="add-dish">
-      <label class="m-field">Menu section <select name="category_id" required>${state.menu.menu.map((c) => `<option value="${c.id}">${esc(c.name)}</option>`).join('')}</select></label>
+      <label class="m-field">Menu section <select name="category_id" required>${venueMenu().map((c) => `<option value="${c.id}">${esc(c.name)}</option>`).join('')}</select></label>
       <label class="m-field">Name <input type="text" name="name" maxlength="60" required></label>
       <label class="m-field">Description <input type="text" name="description" maxlength="200"></label>
       <label class="m-field">Price in guilders <input type="number" name="price" min="1" max="1000" step="0.5" inputmode="decimal" required></label>
@@ -710,7 +753,7 @@ const fromTime = (value, isClose) => {
   return isClose && minutes === 0 ? 1440 : minutes;
 };
 function hoursView() {
-  const s = state.menu.settings;
+  const s = vs();
   return `${head('Hours and ordering', 'What customers can do on the website, and when')}
     <div class="grid grid-2">
       <section class="card-p"><h2>Right now</h2><p class="sub">Switches for tonight</p>
@@ -723,7 +766,7 @@ function hoursView() {
           <label class="m-field">Minutes to prepare an order <input type="number" id="prep_minutes" min="5" max="120" value="${s.prep_base ?? s.prep_minutes}"></label>
           <label class="m-field">Stop taking orders this many minutes before closing <input type="number" id="last_order" min="0" max="120" value="${s.last_order_minutes_before_close}"></label>
           <label class="m-field">Message while orders are paused <input type="text" id="paused_message" maxlength="160" value="${esc(s.paused_message || '')}" placeholder="Online ordering is paused right now. Please check back soon."></label>
-          <label class="m-field">Phone number on the website <input type="text" id="phone" maxlength="30" value="${esc(s.phone || '')}"></label>
+          ${isRoof() ? '<p class="muted">The phone number is the same for both and is set under Street Food.</p>' : `<label class="m-field">Phone number on the website <input type="text" id="phone" maxlength="30" value="${esc(s.phone || '')}"></label>`}
         </div>
       </section>
     </div>
@@ -743,12 +786,12 @@ function hoursView() {
 // ---------- settings ----------
 function settingsView() {
   const s = state.menu.settings;
-  const p = state.printer;
+  const p = state.printer && (isRoof() ? state.printer.rooftop : state.printer);
   const seen = p?.last_seen ? new Date(p.last_seen) : null;
   const ago = seen ? Math.round((Date.now() - seen) / 60000) : null;
   return `${head('Settings', 'Printer, reports and figures')}
     <div class="grid grid-2">
-      <section class="card-p"><h2>Kitchen printer</h2><p class="sub">The Star printer prints every website order by itself: a kitchen ticket, then the customer receipt</p>
+      <section class="card-p"><h2>${isRoof() ? 'Rooftop printer' : 'Kitchen printer'}</h2><p class="sub">${isRoof() ? 'The rooftop has its own Star printer with its own link. It prints only Volcano Experience orders' : 'The Star printer prints every website order by itself: a kitchen ticket, then the customer receipt'}</p>
         ${
           p
             ? `<div class="form"><label class="m-field">Printer link <small>In the printer's settings, switch on CloudPRNT and paste this as the server URL. Keep it private.</small>
@@ -805,7 +848,7 @@ async function exportData(kind) {
   if (kind === 'orders') {
     toast('Preparing the download…');
     const o = state.orders;
-    const data = await api(`/api/admin/orders?from=${r.from}&to=${r.to}&q=${encodeURIComponent(o.q)}&status=${o.status}&limit=2000`);
+    const data = await api(`/api/admin/orders?from=${r.from}&to=${r.to}&q=${encodeURIComponent(o.q)}&status=${o.status}&limit=2000&${vq()}`);
     download(`volcano-orders-${tag}.csv`, [
       ['Day', 'Time', 'Order', 'Name', 'Phone', 'Items', 'Total (XCG)', 'Payment', 'Status'],
       ...data.orders.map((x) => [
@@ -869,6 +912,7 @@ app.addEventListener('click', async (event) => {
   const el = event.target.closest('button, a[data-go], tr[data-order], input[data-select]');
   if (!el) return;
   if (el.matches('input[data-select]')) return el.select();
+  if (el.dataset.venue) return switchVenue(el.dataset.venue);
   if (el.dataset.go) {
     event.preventDefault();
     return go(el.dataset.go);
@@ -892,7 +936,7 @@ app.addEventListener('click', async (event) => {
   }
   if (el.dataset.quickPause) {
     const paused = el.dataset.quickPause === '1';
-    if (await save(() => api('/api/staff/pause', { method: 'POST', body: { paused } }), paused ? 'Online orders paused' : 'Online orders are open again')) {
+    if (await save(() => api('/api/staff/pause', { method: 'POST', body: { paused, venue: state.venue } }), paused ? 'Online orders paused' : 'Online orders are open again')) {
       await loadBase();
       render();
     }
@@ -1030,7 +1074,7 @@ app.addEventListener('change', async (event) => {
   if (el.id === 'closed_today' || el.id === 'busy_today') {
     const closing = el.id === 'closed_today';
     const ok = await save(
-      () => api(`/api/staff/${closing ? 'closed' : 'busy'}`, { method: 'POST', body: { on: el.checked } }),
+      () => api(`/api/staff/${closing ? 'closed' : 'busy'}`, { method: 'POST', body: { on: el.checked, venue: state.venue } }),
       closing ? (el.checked ? 'Closed for today' : 'Open again today') : el.checked ? 'Wait is 15 minutes longer today' : 'Wait is back to normal'
     );
     if (ok) await reloadMenu();
@@ -1038,7 +1082,7 @@ app.addEventListener('change', async (event) => {
     return;
   }
   if (el.id === 'paused') {
-    const ok = await save(() => api('/api/staff/pause', { method: 'POST', body: { paused: el.checked } }), el.checked ? 'Online orders paused' : 'Online orders are open again');
+    const ok = await save(() => api('/api/staff/pause', { method: 'POST', body: { paused: el.checked, venue: state.venue } }), el.checked ? 'Online orders paused' : 'Online orders are open again');
     if (ok) await reloadMenu();
     else el.checked = !el.checked;
     return;
@@ -1046,8 +1090,11 @@ app.addEventListener('change', async (event) => {
   const settingFields = { paused_message: 'paused_message', prep_minutes: 'prep_minutes', last_order: 'last_order_minutes_before_close', phone: 'phone', report_email: 'report_email' };
   if (settingFields[el.id]) {
     const value = el.type === 'number' ? Number(el.value) : el.value;
-    if (await save(() => api('/api/admin/settings', { method: 'PUT', body: { [settingFields[el.id]]: value } }))) {
-      state.menu.settings[settingFields[el.id]] = el.id === 'report_email' ? el.value.trim() : value;
+    const shared = ['phone', 'report_email'].includes(el.id);
+    const body = { [settingFields[el.id]]: value, ...(shared ? {} : { venue: state.venue }) };
+    if (await save(() => api('/api/admin/settings', { method: 'PUT', body }))) {
+      if (shared) state.menu.settings[settingFields[el.id]] = el.id === 'report_email' ? el.value.trim() : value;
+      else setVs(settingFields[el.id], value);
       const button = app.querySelector('[data-report-send]');
       if (button) button.disabled = !state.menu.settings.report_email;
     }
@@ -1059,8 +1106,8 @@ app.addEventListener('change', async (event) => {
     row.querySelector('[data-from]').disabled = !open;
     row.querySelector('[data-to]').disabled = !open;
     row.querySelector('.toggle small').textContent = open ? 'Open' : 'Closed';
-    if (await save(() => api('/api/admin/settings', { method: 'PUT', body: { hours: collectHours() } }), 'Hours saved')) {
-      state.menu.settings.hours = collectHours();
+    if (await save(() => api('/api/admin/settings', { method: 'PUT', body: { hours: collectHours(), venue: state.venue } }), 'Hours saved')) {
+      setVs('hours', collectHours());
     }
   }
 });

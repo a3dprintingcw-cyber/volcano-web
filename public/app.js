@@ -25,15 +25,68 @@ function track(kind, page = '') {
     /* counting must never get in the way of ordering */
   }
 }
-track('view', 'menu');
 
-const CART_KEY = 'volcano_cart_v1';
+// ---------- where the customer orders: downstairs or the rooftop ----------
+
+// "street" is Volcano Street Food (downstairs). "rooftop" is Volcano Experience, the sushi rooftop.
+// The choice is in the address (?venue=rooftop), so the rooftop QR code opens straight on the sushi menu.
+const VENUES = {
+  street: { logo: '/img/logo.png', logoAlt: 'Volcano Street Food', title: 'Volcano Street Food | Order for pickup' },
+  rooftop: { logo: '/img/logo-experience.webp', logoAlt: 'Volcano Experience', title: 'Volcano Experience | Rooftop sushi' },
+};
+let venue = new URLSearchParams(location.search).get('venue') === 'rooftop' ? 'rooftop' : 'street';
+
+// Each venue keeps its own cart and last order, so sushi and burgers never mix in one order.
+// Name and phone are shared.
+const keyFor = (base) => (venue === 'rooftop' ? `${base}_rooftop` : base);
+const CART_KEY = () => keyFor('volcano_cart_v1');
 const CUSTOMER_KEY = 'volcano_customer_v1';
-const LAST_ORDER_KEY = 'volcano_last_order_v1';
-const LAST_CART_KEY = 'volcano_last_cart_v1';
+const LAST_ORDER_KEY = () => keyFor('volcano_last_order_v1');
+const LAST_CART_KEY = () => keyFor('volcano_last_cart_v1');
+const menuUrl = () => (venue === 'rooftop' ? '/api/menu?venue=rooftop' : '/api/menu');
 
 const $ = (id) => document.getElementById(id);
-const state = { menu: [], items: new Map(), info: null, availability: null, cart: store.get(CART_KEY, []), section: null };
+const state = { menu: [], items: new Map(), info: null, availability: null, cart: store.get(CART_KEY(), []), section: null };
+
+// Logo, wording and colours for the chosen venue.
+function applyVenue() {
+  const v = VENUES[venue];
+  document.body.dataset.venue = venue;
+  document.title = v.title;
+  const logo = document.querySelector('.hero .logo');
+  logo.src = v.logo;
+  logo.alt = v.logoAlt;
+  $('hero-sub').textContent = t(venue === 'rooftop' ? 'rooftop.sub' : 'hero.sub');
+  $('about-1').textContent = t(venue === 'rooftop' ? 'rooftop.about_1' : 'foot.about_1');
+  $('about-2').textContent = t(venue === 'rooftop' ? 'rooftop.about_2' : 'foot.about_2');
+  for (const button of document.querySelectorAll('[data-venue]')) button.setAttribute('aria-pressed', String(button.dataset.venue === venue));
+}
+
+function switchVenue(next) {
+  if (next === venue) return;
+  venue = next;
+  const url = new URL(location.href);
+  if (venue === 'rooftop') url.searchParams.set('venue', 'rooftop');
+  else url.searchParams.delete('venue');
+  url.hash = '';
+  history.replaceState(null, '', url);
+  state.cart = store.get(CART_KEY(), []);
+  state.section = null;
+  state.menu = [];
+  applyVenue();
+  $('menu').setAttribute('aria-busy', 'true');
+  $('menu').innerHTML = `<p class="loading">${t('menu.loading')}</p>`;
+  $('cats').innerHTML = '';
+  track('view', venue === 'rooftop' ? 'rooftop' : 'menu');
+  load();
+}
+
+document.querySelector('.venues').addEventListener('click', (event) => {
+  const button = event.target.closest('[data-venue]');
+  if (button) switchVenue(button.dataset.venue);
+});
+applyVenue();
+track('view', venue === 'rooftop' ? 'rooftop' : 'menu');
 
 // The server sends the real sections. "Popular" is added in front when there are best sellers to show.
 function withPopular(menu, popular) {
@@ -46,8 +99,11 @@ function withPopular(menu, popular) {
 // ---------- loading ----------
 
 async function load() {
+  const asked = venue;
   try {
-    const data = await api('/api/menu');
+    const data = await api(menuUrl());
+    // The customer switched venue while this was loading: that load takes over.
+    if (asked !== venue) return;
     state.menu = withPopular(data.menu, data.popular);
     state.info = data.info;
     state.availability = data.availability;
@@ -95,7 +151,7 @@ function renderPage() {
   // The kitchen sets the wait time, so this is what customers can really expect right now.
   const wait = $('hero-wait');
   wait.hidden = !(avail.can_order && avail.open_now);
-  wait.textContent = t('hero.wait', { n: info.prep_minutes });
+  wait.textContent = t(venue === 'rooftop' ? 'rooftop.wait' : 'hero.wait', { n: info.prep_minutes });
 
   // The menu shows one section at a time. Which one is open is kept in the
   // address (#tacos), so a shared link or the back button lands on the same section.
@@ -322,7 +378,7 @@ itemDialog.addEventListener('click', (event) => {
 // ---------- cart ----------
 
 function saveCart() {
-  store.set(CART_KEY, state.cart);
+  store.set(CART_KEY(), state.cart);
 }
 
 function addToCart(line) {
@@ -455,7 +511,7 @@ function renderCart() {
       <form class="checkout" id="checkout" novalidate>
         <h3>${t('cart.details')}</h3>
         <div class="field">
-          <label for="c-time">${t('cart.time')}</label>
+          <label for="c-time">${t(venue === 'rooftop' ? 'rooftop.time' : 'cart.time')}</label>
           <select id="c-time" name="pickup" required>${times}</select>
         </div>
         <div class="field">
@@ -637,6 +693,7 @@ cartDialog.addEventListener('submit', async (event) => {
     const order = await api('/api/orders', {
       method: 'POST',
       body: {
+        venue,
         name,
         phone,
         notes: String(data.get('notes') || ''),
@@ -646,8 +703,8 @@ cartDialog.addEventListener('submit', async (event) => {
         items: state.cart,
       },
     });
-    store.set(LAST_ORDER_KEY, { id: order.id, number: order.number, at: Date.now() });
-    store.set(LAST_CART_KEY, state.cart);
+    store.set(LAST_ORDER_KEY(), { id: order.id, number: order.number, at: Date.now() });
+    store.set(LAST_CART_KEY(), state.cart);
     state.cart = [];
     saveCart();
     // Paying online: on to Sentoo's payment page. Sentoo sends the customer back to the order page.
@@ -657,7 +714,7 @@ cartDialog.addEventListener('submit', async (event) => {
     // The menu or opening times may have changed under us: refresh and show why.
     if (err.status === 409) {
       try {
-        const data2 = await api('/api/menu');
+        const data2 = await api(menuUrl());
         state.menu = withPopular(data2.menu, data2.popular);
         state.availability = data2.availability;
         state.items = new Map(data2.menu.flatMap((c) => c.items).map((i) => [i.id, i]));
@@ -676,7 +733,7 @@ cartDialog.addEventListener('submit', async (event) => {
 
 // Lines from the previous order that are still on the menu today.
 function lastOrderLines() {
-  return store.get(LAST_CART_KEY, []).filter((line) => {
+  return store.get(LAST_CART_KEY(), []).filter((line) => {
     const item = state.items.get(line.item_id);
     if (!item || !item.available || !Array.isArray(line.option_ids)) return false;
     const options = new Map(item.groups.flatMap((g) => g.options).map((o) => [o.id, o]));
@@ -704,7 +761,7 @@ $('again').addEventListener('click', () => {
 
 function renderTracker() {
   renderAgain();
-  const last = store.get(LAST_ORDER_KEY, null);
+  const last = store.get(LAST_ORDER_KEY(), null);
   const link = $('tracker');
   if (!last || Date.now() - last.at > 6 * 3600 * 1000) {
     link.hidden = true;
@@ -723,7 +780,7 @@ $('menu').addEventListener('click', (event) => {
 // Coming back with the back button after ordering: show the emptied cart.
 window.addEventListener('pageshow', (event) => {
   if (event.persisted) {
-    state.cart = store.get(CART_KEY, []);
+    state.cart = store.get(CART_KEY(), []);
     renderCartBar();
     renderTracker();
   }
@@ -874,7 +931,7 @@ load();
 setInterval(async () => {
   if (itemDialog.open || cartDialog.open) return;
   try {
-    const data = await api('/api/menu');
+    const data = await api(menuUrl());
     const fresh = withPopular(data.menu, data.popular);
     const changed = JSON.stringify(fresh) !== JSON.stringify(state.menu) || data.availability.message !== state.availability.message;
     state.availability = data.availability;

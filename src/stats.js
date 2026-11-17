@@ -104,19 +104,25 @@ export function readRange(url, settings) {
   if (!isDate(from) || from > to) from = addDays(to, -6);
   if (daysBetween(from, to) > 731) from = addDays(to, -730);
   const length = daysBetween(from, to);
-  return { from, to, today, length, prevFrom: addDays(from, -length), prevTo: addDays(from, -1) };
+  // Downstairs, the rooftop, or both (no venue given).
+  const v = url.searchParams.get('venue');
+  const venue = v === 'street' || v === 'rooftop' ? v : '';
+  return { from, to, today, length, prevFrom: addDays(from, -length), prevTo: addDays(from, -1), venue };
 }
 
 // ---------- the dashboard figures ----------
 
 const pct = (part, whole) => (whole ? Math.round((part / whole) * 1000) / 10 : 0);
 
-async function periodTotals(db, from, to, since) {
+// A fixed SQL condition for the chosen venue. Only the two known values ever get here.
+const venueClause = (venue, alias = '') => (venue === 'street' || venue === 'rooftop' ? ` AND ${alias}venue = '${venue}'` : '');
+
+async function periodTotals(db, from, to, since, venue = '') {
   const [orders, visits] = await db.batch([
     db
       .prepare(
         `SELECT COUNT(*) AS orders, COALESCE(SUM(total_cents), 0) AS sales_cents
-         FROM orders WHERE ${COUNTED} AND service_day BETWEEN ? AND ? AND created_at >= ?`
+         FROM orders WHERE ${COUNTED}${venueClause(venue)} AND service_day BETWEEN ? AND ? AND created_at >= ?`
       )
       .bind(from, to, since),
     db.prepare("SELECT COUNT(DISTINCT day || vid) AS visitors, SUM(kind = 'view') AS views FROM visits WHERE day BETWEEN ? AND ?").bind(from, to),
@@ -137,7 +143,8 @@ export async function dashboardStats(db, settings, range) {
   const since = settings.sales_since || 0;
   const offsetSec = (settings.timezone_offset_minutes || 0) * 60;
   const { from, to } = range;
-  const between = 'service_day BETWEEN ? AND ? AND created_at >= ?';
+  const between = `service_day BETWEEN ? AND ? AND created_at >= ?${venueClause(range.venue)}`;
+  const V = venueClause(range.venue, 'o.');
 
   const [byDay, byHour, byWeekday, money, kinds, items, categories, optionRows, visitDays, sources, devices, langs, funnel, cancelled, customers, live] =
     await db.batch([
@@ -177,7 +184,7 @@ export async function dashboardStats(db, settings, range) {
         .prepare(
           `SELECT oi.name AS name, SUM(oi.quantity) AS quantity, SUM(oi.quantity * oi.unit_price_cents) AS sales_cents
            FROM order_items oi JOIN orders o ON o.id = oi.order_id
-           WHERE o.${COUNTED} AND o.service_day BETWEEN ? AND ? AND o.created_at >= ?
+           WHERE o.${COUNTED}${V} AND o.service_day BETWEEN ? AND ? AND o.created_at >= ?
            GROUP BY oi.name ORDER BY quantity DESC, sales_cents DESC LIMIT 60`
         )
         .bind(from, to, since),
@@ -186,14 +193,14 @@ export async function dashboardStats(db, settings, range) {
           `SELECT COALESCE(c.name, 'Other') AS name, SUM(oi.quantity) AS quantity, SUM(oi.quantity * oi.unit_price_cents) AS sales_cents
            FROM order_items oi JOIN orders o ON o.id = oi.order_id
            LEFT JOIN items i ON i.id = oi.item_id LEFT JOIN categories c ON c.id = i.category_id
-           WHERE o.${COUNTED} AND o.service_day BETWEEN ? AND ? AND o.created_at >= ?
+           WHERE o.${COUNTED}${V} AND o.service_day BETWEEN ? AND ? AND o.created_at >= ?
            GROUP BY c.name ORDER BY sales_cents DESC`
         )
         .bind(from, to, since),
       db
         .prepare(
           `SELECT oi.options AS options, oi.quantity AS quantity FROM order_items oi JOIN orders o ON o.id = oi.order_id
-           WHERE o.${COUNTED} AND o.service_day BETWEEN ? AND ? AND o.created_at >= ? AND oi.options != '[]' LIMIT 5000`
+           WHERE o.${COUNTED}${V} AND o.service_day BETWEEN ? AND ? AND o.created_at >= ? AND oi.options != '[]' LIMIT 5000`
         )
         .bind(from, to, since),
       db
@@ -231,7 +238,7 @@ export async function dashboardStats(db, settings, range) {
            SELECT COUNT(DISTINCT o.phone) AS customers,
                   COUNT(DISTINCT CASE WHEN f.first_day >= ? THEN o.phone END) AS new_customers
            FROM orders o JOIN firsts f ON f.phone = o.phone
-           WHERE o.${COUNTED} AND o.service_day BETWEEN ? AND ? AND o.created_at >= ?`
+           WHERE o.${COUNTED}${V} AND o.service_day BETWEEN ? AND ? AND o.created_at >= ?`
         )
         .bind(since, from, from, to, since),
       db
@@ -289,7 +296,7 @@ export async function dashboardStats(db, settings, range) {
     .sort((a, b) => b.quantity - a.quantity)
     .slice(0, 12);
 
-  const [current, previous] = await Promise.all([periodTotals(db, from, to, since), periodTotals(db, range.prevFrom, range.prevTo, since)]);
+  const [current, previous] = await Promise.all([periodTotals(db, from, to, since, range.venue), periodTotals(db, range.prevFrom, range.prevTo, since, range.venue)]);
   const k = kinds.results[0];
   const f = funnel.results[0];
   const c = cancelled.results[0];
@@ -340,6 +347,10 @@ export async function dashboardStats(db, settings, range) {
 export async function orderList(db, settings, range, { q = '', status = '', offset = 0, limit = 50 } = {}) {
   const where = ['service_day BETWEEN ? AND ?', "status != 'awaiting_payment'"];
   const binds = [range.from, range.to];
+  if (range.venue) {
+    where.push('venue = ?');
+    binds.push(range.venue);
+  }
   if (['new', 'preparing', 'ready', 'done', 'cancelled'].includes(status)) {
     where.push('status = ?');
     binds.push(status);
@@ -414,6 +425,7 @@ export async function orderList(db, settings, range, { q = '', status = '', offs
 
 export async function customerList(db, settings, range) {
   const since = settings.sales_since || 0;
+  const V = venueClause(range.venue, 'o.');
   const { results } = await db
     .prepare(
       `WITH firsts AS (SELECT phone, MIN(created_at) AS first_at, COUNT(*) AS lifetime_orders, SUM(total_cents) AS lifetime_cents
@@ -423,7 +435,7 @@ export async function customerList(db, settings, range) {
               COUNT(*) AS orders, SUM(o.total_cents) AS sales_cents, MAX(o.created_at) AS last_at,
               f.first_at AS first_at, f.lifetime_orders AS lifetime_orders, f.lifetime_cents AS lifetime_cents
        FROM orders o JOIN firsts f ON f.phone = o.phone
-       WHERE o.${COUNTED} AND o.service_day BETWEEN ? AND ? AND o.created_at >= ?
+       WHERE o.${COUNTED}${V} AND o.service_day BETWEEN ? AND ? AND o.created_at >= ?
        GROUP BY o.phone ORDER BY sales_cents DESC LIMIT 200`
     )
     .bind(since, range.from, range.to, since)

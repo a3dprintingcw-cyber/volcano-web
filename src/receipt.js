@@ -197,7 +197,7 @@ export function drawReceipt(order, offsetMinutes) {
   y += 10;
   centered('Eruption of Flavors!', 'big');
   y += 10;
-  for (const l of ['VOLCANO STREET FOOD', 'Rooseveltweg 271', 'Willemstad, Curaçao', '+5999 565 2266', 'CRIB : 102.673.913']) {
+  for (const l of [order.venue === 'rooftop' ? 'VOLCANO EXPERIENCE' : 'VOLCANO STREET FOOD', 'Rooseveltweg 271', 'Willemstad, Curaçao', '+5999 565 2266', 'CRIB : 102.673.913']) {
     drawText(c, PAD, y, l, 'body');
     y += lineH('body') - 2;
   }

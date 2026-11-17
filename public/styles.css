@@ -345,3 +345,30 @@ fieldset.group legend { padding: 0; font-weight: 700; font-size: 1.05rem; displa
 @media (prefers-reduced-motion: reduce) {
   .btn-erupt.is-rumbling, .is-quaking .hero, .is-quaking .menu, .sheet-pick[open] .pick-card { animation: none; }
 }
+
+/* ---------- venue switch: Street Food (downstairs) or Volcano Experience (rooftop) ---------- */
+.venues {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 0.25rem;
+  width: min(100%, 26rem); padding: 0.25rem;
+  background: var(--char); border: 1px solid var(--ember); border-radius: 999px;
+  position: relative; z-index: 4;
+}
+.venues button {
+  display: grid; justify-items: center; gap: 0; line-height: 1.15;
+  padding: 0.5rem 0.75rem; border: 0; border-radius: 999px;
+  background: transparent; color: var(--smoke);
+}
+.venues b { font-family: var(--display); font-weight: 400; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.02em; }
+.venues small { font-size: 0.78rem; font-weight: 500; }
+.venues button[aria-pressed="true"] { background: var(--magma); color: var(--ink); }
+.venues button:not([aria-pressed="true"]):hover { color: var(--ash); }
+
+/* The rooftop: darker, the Experience logo, no street food photo. */
+body[data-venue="rooftop"] { background: #121212; }
+body[data-venue="rooftop"] .hero-photo { display: none; }
+body[data-venue="rooftop"] .hero { grid-template-columns: 1fr !important; }
+body[data-venue="rooftop"] .logo { width: 14rem; margin: 0.5rem 0 0.75rem; }
+@media (min-width: 62rem) {
+  body[data-venue="rooftop"] .hero-text { text-align: center; justify-items: center; }
+  body[data-venue="rooftop"] .logo { width: 16rem; margin-left: 0; }
+}

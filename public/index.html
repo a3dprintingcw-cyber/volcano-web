@@ -33,9 +33,13 @@
 
   <section class="hero">
     <div class="hero-text">
+      <div class="venues" role="group" data-t="venue.label" data-t-attr="aria-label">
+        <button type="button" data-venue="street" aria-pressed="true"><b>Street Food</b><small data-t="venue.street">Downstairs</small></button>
+        <button type="button" data-venue="rooftop" aria-pressed="false"><b>Volcano Experience</b><small data-t="venue.rooftop">Rooftop sushi</small></button>
+      </div>
       <img class="logo" src="/img/logo.png" width="224" height="225" alt="Volcano Street Food">
       <h1>Eruption of flavors</h1>
-      <p class="hero-sub" data-t="hero.sub">Order here, pick it up hot.</p>
+      <p class="hero-sub" id="hero-sub" data-t="hero.sub">Order here, pick it up hot.</p>
       <p class="hero-hours" id="hero-hours" data-t="hero.hours">Tuesday to Sunday, 6 PM to 12 AM</p>
       <p class="hero-wait" id="hero-wait" hidden></p>
       <div class="hero-actions">
@@ -63,8 +67,8 @@
     <div class="foot-inner">
       <div>
         <h2 data-t="foot.about">About us</h2>
-        <p data-t="foot.about_1">Bold street food, cooked fresh every day: burgers, loaded fries, tacos, kapsalon and plates from the grill.</p>
-        <p data-t="foot.about_2">Order here and pick it up, or come eat with us on the rooftop terrace.</p>
+        <p id="about-1" data-t="foot.about_1">Bold street food, cooked fresh every day: burgers, loaded fries, tacos, kapsalon and plates from the grill.</p>
+        <p id="about-2" data-t="foot.about_2">Order here and pick it up, or come eat with us on the rooftop terrace.</p>
         <p class="muted" data-t="foot.veg">Ask for our vegetarian options.</p>
       </div>
       <div>

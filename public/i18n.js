@@ -6,6 +6,15 @@ import { store } from '/shared.js';
 const TEXT = {
   en: {
     'lang.switch': 'Papiamentu',
+    'venue.label': 'Where are you ordering?',
+    'venue.street': 'Downstairs',
+    'venue.rooftop': 'Rooftop sushi',
+    'rooftop.sub': 'Sushi on the rooftop. Order here, pick it up at the rooftop bar.',
+    'rooftop.wait': 'Ready at the rooftop bar in about {n} minutes',
+    'rooftop.time': 'Pickup time at the rooftop bar',
+    'rooftop.about_1': 'Sushi rolls, nigiri, sashimi and tempura rolls, made fresh on the rooftop of Volcano.',
+    'rooftop.about_2': 'Order here and pick it up at the rooftop bar upstairs.',
+    'rooftop.pickup': 'Pick it up at the rooftop bar (Volcano Experience, upstairs).',
     'skip': 'Skip to the menu',
     'hero.sub': 'Order here, pick it up hot.',
     'hero.cta': 'See the menu',
@@ -170,6 +179,15 @@ const TEXT = {
 
   pap: {
     'lang.switch': 'English',
+    'venue.label': 'Unda bo ta pidi?',
+    'venue.street': 'Abou',
+    'venue.rooftop': 'Sushi riba rooftop',
+    'rooftop.sub': 'Sushi riba rooftop. Pidi aki, buska na e bar riba rooftop.',
+    'rooftop.wait': 'Kla na e bar riba rooftop den mas o ménos {n} minüt',
+    'rooftop.time': 'Ora pa buska na e bar riba rooftop',
+    'rooftop.about_1': 'Sushi roll, nigiri, sashimi i tempura roll, prepará fresku riba e rooftop di Volcano.',
+    'rooftop.about_2': 'Pidi aki i buska na e bar riba rooftop.',
+    'rooftop.pickup': 'Buska na e bar riba rooftop (Volcano Experience, ariba).',
     'skip': 'Bai na e menú',
     'hero.sub': 'Pidi aki, buska bo kuminda kayente.',
     'hero.cta': 'Mira e menú',

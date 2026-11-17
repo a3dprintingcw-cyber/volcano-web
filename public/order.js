@@ -86,9 +86,12 @@ function announceReady(order) {
   } catch {
     /* sound may be blocked until the page is tapped */
   }
-  document.title = `${t('order.ready_title', { n: order.number })} | Volcano Street Food`;
+  document.title = `${t('order.ready_title', { n: order.number })} | ${placeName(order)}`;
 }
 const ticket = document.getElementById('ticket');
+// Rooftop orders (Volcano Experience) lead back to the rooftop menu.
+const placeName = (order) => (order && order.venue === 'rooftop' ? 'Volcano Experience' : 'Volcano Street Food');
+const menuLink = (order) => (order && order.venue === 'rooftop' ? '/?venue=rooftop' : '/');
 const STEPS = ['new', 'preparing', 'ready'];
 const STEP_LABELS = { new: t('order.step_new'), preparing: t('order.step_preparing'), ready: t('order.step_ready') };
 let timer = null;
@@ -201,7 +204,8 @@ function render({ order, info }) {
   const tel = `tel:${info.phone.replace(/[^\d+]/g, '')}`;
   document.getElementById('phone-link').href = tel;
   document.getElementById('phone-link').textContent = info.phone;
-  document.title = order.status === 'ready' ? `${t('order.ready_title', { n: order.number })} | Volcano Street Food` : `#${order.number}: ${title} | Volcano Street Food`;
+  document.querySelector('.top-phone[data-t="order.back"]').href = menuLink(order);
+  document.title = order.status === 'ready' ? `${t('order.ready_title', { n: order.number })} | ${placeName(order)}` : `#${order.number}: ${title} | ${placeName(order)}`;
 
   const stage = volcanoStage(order);
   // 'STAGE' is filled in below: the volcano is first drawn at the stage it was last shown
@@ -217,6 +221,7 @@ function render({ order, info }) {
       <h1 class="ticket-status">${esc(title)}</h1>
       <p class="ticket-detail">${esc(detail)}</p>
       ${awaiting ? '' : `<div class="ticket-notify">${notifyBlock(active && order.status !== 'ready')}</div>`}
+      ${active && order.venue === 'rooftop' ? `<p class="ticket-where"><strong>${t('rooftop.pickup')}</strong></p>` : ''}
       ${active ? `<p class="ticket-where">${t('order.pickup_at')} <a href="${esc(PLACE.mapUrl)}" rel="noopener">${esc(PLACE.address)}</a></p>` : ''}
       ${
         order.status === 'cancelled' || awaiting
@@ -246,7 +251,7 @@ function render({ order, info }) {
       ${active ? `<a class="btn btn-quiet" href="${tel}">${esc(t('order.call', { phone: info.phone }))}</a>` : ''}
       ${cancelError ? `<p class="error" role="alert">${esc(cancelError)}</p>` : ''}
       ${order.can_cancel ? `<button class="btn btn-quiet btn-cancel" type="button" id="cancel-order">${confirmingCancel ? t('order.cancel_confirm') : t('order.cancel')}</button>` : ''}
-      <a class="btn ${payment && payment.retry ? 'btn-quiet' : 'btn-primary'}" href="/">${active ? t('order.back') : t('order.again')}</a>
+      <a class="btn ${payment && payment.retry ? 'btn-quiet' : 'btn-primary'}" href="${menuLink(order)}">${active ? t('order.back') : t('order.again')}</a>
     </div>`;
   // The page is only redrawn when something changed, so the animations are not cut short every few seconds.
   if (html !== lastHtml || stage !== shownStage) {
