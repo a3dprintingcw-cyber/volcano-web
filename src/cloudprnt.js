@@ -256,7 +256,7 @@ export function receiptText(order, offsetMinutes) {
   out.push('');
   out.push(center('Eruption of Flavors!'));
   out.push('');
-  out.push(order.venue === 'rooftop' ? 'VOLCANO EXPERIENCE' : 'VOLCANO STREET FOOD', 'Rooseveltweg 271', 'Willemstad, Curacao', '+5999 565 2266', 'CRIB : 102.673.913');
+  out.push(order.venue === 'rooftop' ? 'VOLCANO EXPERIENCE' : 'VOLCANO STREET FOOD', 'Rooseveltweg 271', 'Willemstad, Curacao', order.venue === 'rooftop' ? '+5999 564 2266' : '+5999 565 2266', 'CRIB : 102.673.913');
   out.push('', '');
   return out.join('\n');
 }

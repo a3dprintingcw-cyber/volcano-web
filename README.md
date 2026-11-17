@@ -59,7 +59,7 @@ The site takes orders for two places: Volcano Street Food (downstairs) and Volca
 | Printer | its CloudPRNT link (Settings) | its own CloudPRNT link (Settings, with Experience picked) |
 | Menu source | `menu/menu.mjs`, `npm run menu:reload:remote` | `menu/rooftop.mjs`, `npm run rooftop:reload:remote` |
 
-- Each venue has its own opening hours, wait time, pause, busy and closed today switches. The rooftop keeps them in the settings key `rooftop`. The phone number and the day report email are shared.
+- Each venue has its own opening hours, wait time, pause, busy and closed today switches. The rooftop keeps them in the settings key `rooftop`. The rooftop has its own phone number (+599 9 564 2266). The day report email is shared.
 - Customers have a separate cart per venue, so sushi and burgers never end up in one order. The server only accepts dishes from the venue's own menu.
 - Reloading one menu never touches the other: the rooftop rows have their own id range (sections from 101, dishes from 10001).
 - Order numbers are counted per day across both venues, so a number is never used twice that day.

@@ -766,7 +766,7 @@ function hoursView() {
           <label class="m-field">Minutes to prepare an order <input type="number" id="prep_minutes" min="5" max="120" value="${s.prep_base ?? s.prep_minutes}"></label>
           <label class="m-field">Stop taking orders this many minutes before closing <input type="number" id="last_order" min="0" max="120" value="${s.last_order_minutes_before_close}"></label>
           <label class="m-field">Message while orders are paused <input type="text" id="paused_message" maxlength="160" value="${esc(s.paused_message || '')}" placeholder="Online ordering is paused right now. Please check back soon."></label>
-          ${isRoof() ? '<p class="muted">The phone number is the same for both and is set under Street Food.</p>' : `<label class="m-field">Phone number on the website <input type="text" id="phone" maxlength="30" value="${esc(s.phone || '')}"></label>`}
+          <label class="m-field">Phone number on the website <input type="text" id="phone" maxlength="30" value="${esc(s.phone || '')}"></label>
         </div>
       </section>
     </div>
@@ -1090,7 +1090,7 @@ app.addEventListener('change', async (event) => {
   const settingFields = { paused_message: 'paused_message', prep_minutes: 'prep_minutes', last_order: 'last_order_minutes_before_close', phone: 'phone', report_email: 'report_email' };
   if (settingFields[el.id]) {
     const value = el.type === 'number' ? Number(el.value) : el.value;
-    const shared = ['phone', 'report_email'].includes(el.id);
+    const shared = el.id === 'report_email';
     const body = { [settingFields[el.id]]: value, ...(shared ? {} : { venue: state.venue }) };
     if (await save(() => api('/api/admin/settings', { method: 'PUT', body }))) {
       if (shared) state.menu.settings[settingFields[el.id]] = el.id === 'report_email' ? el.value.trim() : value;

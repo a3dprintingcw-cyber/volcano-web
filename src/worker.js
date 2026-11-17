@@ -87,8 +87,8 @@ const visitor = (request) => request.headers.get('cf-connecting-ip') || 'local';
 const VENUES = ['street', 'rooftop'];
 const venueOf = (value) => (value === 'rooftop' ? 'rooftop' : 'street');
 const VENUE_NAMES = { street: 'Volcano Street Food', rooftop: 'Volcano Experience' };
-// The rooftop keeps these under the settings key "rooftop". Everything else is shared.
-const VENUE_KEYS = ['hours', 'prep_minutes', 'last_order_minutes_before_close', 'ordering_paused', 'paused_message', 'busy_day', 'closed_day'];
+// The rooftop keeps these under the settings key "rooftop" (it has its own phone number too). Everything else is shared.
+const VENUE_KEYS = ['phone', 'hours', 'prep_minutes', 'last_order_minutes_before_close', 'ordering_paused', 'paused_message', 'busy_day', 'closed_day'];
 
 // Saves one setting for one venue.
 async function putVenueSetting(db, venue, key, value) {
@@ -868,8 +868,8 @@ function validateSettings(input, current) {
   return { ...current, ...next, _changed: next };
 }
 
-// What the manager may change for the rooftop. Phone and report email are shared and set on the street food side.
-const ROOFTOP_EDITABLE = ['ordering_paused', 'paused_message', 'prep_minutes', 'last_order_minutes_before_close', 'hours'];
+// What the manager may change for the rooftop. The report email is shared and set on the street food side.
+const ROOFTOP_EDITABLE = ['phone', 'ordering_paused', 'paused_message', 'prep_minutes', 'last_order_minutes_before_close', 'hours'];
 
 // ---------- routing ----------
 
@@ -968,7 +968,7 @@ async function handleApi(request, env, url, ctx) {
       .bind(String(body.endpoint || ''))
       .first();
     if (!order) return json({ title: 'Volcano Street Food', body: 'There is news about your order.', url: '/' });
-    const settings = await loadSettings(db);
+    const settings = await loadSettings(db, order.venue);
     return json({ ...notificationFor(order, settings.phone), url: `/order?id=${order.id}`, tag: `order-${order.id}` });
   }
   if ((match = path.match(/^\/api\/orders\/([0-9a-f-]{36})\/cancel$/)) && method === 'POST') {

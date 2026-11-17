@@ -88,6 +88,7 @@ export const rooftopMenu = [
 // Rooftop settings, kept in the settings table under the key "rooftop".
 // Anything not set here falls back to the street food settings (time zone, phone, ...).
 export const rooftopSettings = {
+  phone: '+599 9 564 2266',
   hours: {
     0: { open: 17 * 60, close: 23 * 60 },
     1: null,
