@@ -89,13 +89,13 @@ export const rooftopMenu = [
 // Anything not set here falls back to the street food settings (time zone, phone, ...).
 export const rooftopSettings = {
   hours: {
-    0: { open: 18 * 60, close: 23 * 60 },
+    0: { open: 17 * 60, close: 23 * 60 },
     1: null,
-    2: { open: 18 * 60, close: 23 * 60 },
-    3: { open: 18 * 60, close: 23 * 60 },
-    4: { open: 18 * 60, close: 23 * 60 },
-    5: { open: 18 * 60, close: 23 * 60 },
-    6: { open: 18 * 60, close: 23 * 60 },
+    2: { open: 17 * 60, close: 23 * 60 },
+    3: { open: 17 * 60, close: 23 * 60 },
+    4: { open: 17 * 60, close: 23 * 60 },
+    5: { open: 17 * 60, close: 23 * 60 },
+    6: { open: 17 * 60, close: 23 * 60 },
   },
   prep_minutes: 20,
   last_order_minutes_before_close: 15,
