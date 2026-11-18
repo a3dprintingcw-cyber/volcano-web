@@ -56,6 +56,8 @@ function applyVenue() {
   const logo = document.querySelector('.hero .logo');
   logo.src = v.logo;
   logo.alt = v.logoAlt;
+  // Each venue has its own motto.
+  $('hero-title').innerHTML = venue === 'rooftop' ? 'Premium flavors.<br>Street energy.' : 'Eruption of flavors';
   $('hero-sub').textContent = t(venue === 'rooftop' ? 'rooftop.sub' : 'hero.sub');
   $('about-1').textContent = t(venue === 'rooftop' ? 'rooftop.about_1' : 'foot.about_1');
   $('copyright').textContent = `© 2026 ${v.logoAlt}`;
