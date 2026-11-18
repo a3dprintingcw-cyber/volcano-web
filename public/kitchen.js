@@ -19,6 +19,10 @@ const VENUE = (() => {
 })();
 
 
+// The rooftop board has its own colours, so nobody mixes up the two screens.
+document.body.dataset.venue = VENUE;
+if (VENUE === 'rooftop') document.querySelector('meta[name="theme-color"]')?.setAttribute('content', '#0b0b0b');
+
 const app = document.getElementById('app');
 const COLUMNS = [
   { status: 'new', title: 'New', empty: 'No new orders.', next: 'preparing', action: 'Start cooking' },
@@ -150,7 +154,7 @@ function render() {
   document.title = `${fresh ? `(${fresh}) ` : ''}Kitchen board | ${VENUE_LABEL[VENUE]}`;
   app.innerHTML = `
     <header class="staff-bar">
-      <h1>Kitchen board</h1>
+      <h1>${VENUE === 'rooftop' ? 'Rooftop kitchen' : 'Kitchen board'}</h1>
       <span class="venue-pick" role="group" aria-label="Which kitchen">
         <a class="pill ${VENUE === 'street' ? 'is-on' : ''}" href="/kitchen/?venue=street" aria-current="${VENUE === 'street'}">Street Food</a>
         <a class="pill ${VENUE === 'rooftop' ? 'is-on' : ''}" href="/kitchen/?venue=rooftop" aria-current="${VENUE === 'rooftop'}">Experience (rooftop)</a>

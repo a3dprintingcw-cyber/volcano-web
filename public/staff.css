@@ -129,3 +129,13 @@
 /* Kitchen board: which kitchen (Street Food downstairs, Experience on the rooftop) */
 .venue-pick { display: inline-flex; gap: 0.35rem; }
 .venue-pick a.pill { display: inline-flex; align-items: center; text-decoration: none; }
+
+/* Rooftop (Volcano Experience) board: black and gold instead of lava red */
+body[data-venue="rooftop"] { background: #000; }
+body[data-venue="rooftop"] .staff-bar { background: #0b0b0b; border-bottom: 4px solid var(--magma); }
+body[data-venue="rooftop"] .staff-bar h1 { color: var(--magma); }
+body[data-venue="rooftop"] .staff-bar a { color: var(--magma); }
+body[data-venue="rooftop"] .pill { border-color: var(--magma); color: var(--magma); }
+body[data-venue="rooftop"] .pill.is-on { background: var(--magma); color: var(--ink); }
+body[data-venue="rooftop"] .pill.is-warn { background: var(--lava); border-color: var(--lava); color: var(--ash); }
+body[data-venue="rooftop"] .card .btn-primary { background: #111; color: var(--magma); box-shadow: 0 3px 0 #000; }
