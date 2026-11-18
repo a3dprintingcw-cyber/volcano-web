@@ -66,26 +66,26 @@ function applyVenue() {
   updateFire();
 }
 
-// Live fire in the rooftop header (see fire.js). Loaded only for the rooftop.
-let stopFire = null;
+// Live header effects: lava dripping for Street Food (lava.js), fire for the rooftop (fire.js).
+// The drawn drip and flames in the CSS stay underneath until the live one is running.
+let header = { venue: null, stop: null };
 function updateFire() {
+  if (header.venue === venue) return;
   const drip = document.querySelector('.drip');
-  if (venue === 'rooftop' && !stopFire) {
-    stopFire = 'loading';
-    import('/fire.js')
-      .then(({ startFire }) => {
-        if (venue !== 'rooftop' || stopFire !== 'loading') return;
-        stopFire = startFire(drip);
-        drip.classList.add('is-burning');
-      })
-      .catch(() => {
-        stopFire = null; // the drawn flames stay as they are
-      });
-  } else if (venue !== 'rooftop' && stopFire) {
-    if (typeof stopFire === 'function') stopFire();
-    stopFire = null;
-    drip.classList.remove('is-burning');
-  }
+  if (typeof header.stop === 'function') header.stop();
+  drip.classList.remove('is-burning', 'is-melting', 'is-live');
+  const mine = { venue, stop: null };
+  header = mine;
+  const load = venue === 'rooftop' ? import('/fire.js').then((m) => m.startFire) : import('/lava.js').then((m) => m.startLava);
+  load
+    .then((start) => {
+      if (header !== mine) return; // switched again while loading
+      mine.stop = start(drip);
+      drip.classList.add('is-live', venue === 'rooftop' ? 'is-burning' : 'is-melting');
+    })
+    .catch(() => {
+      /* the drawn drip or flames stay as they are */
+    });
 }
 
 function switchVenue(next) {

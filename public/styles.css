@@ -446,3 +446,10 @@ body[data-venue="rooftop"] .top::after {
   background: radial-gradient(ellipse 70% 100% at 50% 0, rgba(255, 110, 20, 0.18), transparent 70%);
 }
 body[data-venue="rooftop"] .hero { margin-top: 0.75rem; }
+
+/* Street Food: live lava (lava.js) over the drawn drip. */
+.drip { position: relative; }
+.drip.is-melting { background: transparent; }
+.drip .lava { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+/* A little room under the live lava so the drips are seen before they reach the switch. */
+body[data-venue="street"] .drip.is-melting { height: 84px; }
