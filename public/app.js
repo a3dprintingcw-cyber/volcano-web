@@ -219,28 +219,14 @@ window.addEventListener('popstate', () => {
   openSection(known ? slug : state.menu[0].slug, { fromHistory: true });
 });
 
-// Rooftop sushi: "(raw)", "(cooked)" and "(vegetarian)" in a dish name become small labels.
-function nameAndTags(name) {
-  if (venue !== 'rooftop') return { name, tags: [] };
-  const tags = [];
-  const clean = name.replace(/\s*\((raw|cooked|vegetarian)\)/gi, (match, word) => {
-    tags.push(word.toLowerCase());
-    return '';
-  });
-  return { name: clean, tags };
-}
-
 function itemRow(item) {
-  const shown = nameAndTags(item.name);
-  const tags = shown.tags.length ? `<span class="item-tags">${shown.tags.map((tag) => `<span class="tag tag-${tag}">${t(`tag.${tag}`)}</span>`).join('')}</span>` : '';
   const price = `${item.has_price_range ? `<small>${t('menu.from')}</small> ` : ''}${money(item.from_cents)}`;
   const photo = item.photo ? `<img class="item-photo" src="${esc(item.photo.small)}" alt="" loading="lazy" width="100" height="100">` : '';
   return `
     <li>
       <button class="item ${item.available ? '' : 'is-out'}" type="button" data-item="${item.id}" ${item.available ? '' : 'disabled'}>
         <span class="item-body">
-          <span class="item-name">${esc(shown.name)}</span>
-          ${tags}
+          <span class="item-name">${esc(item.name)}</span>
           ${item.description ? `<span class="item-desc">${esc(item.description)}</span>` : ''}
           <span class="item-price">${item.available ? price : `<span class="badge">${t('menu.sold_out')}</span>`}</span>
         </span>
@@ -285,7 +271,7 @@ function openItem(id) {
   itemDialog.innerHTML = `
     <div class="sheet-scroll">
       ${item.photo ? `<div class="sheet-photo-wrap"><img class="sheet-photo ${/\/img\/drink-/.test(item.photo.large) ? 'is-packshot' : ''}" src="${esc(item.photo.large)}" alt="${esc(item.name)}">${close}</div>` : ''}
-      <div class="sheet-head"><h2 id="item-title">${esc(nameAndTags(item.name).name)}${nameAndTags(item.name).tags.map((tag) => ` <span class="tag tag-${tag}">${t(`tag.${tag}`)}</span>`).join('')}</h2>${item.photo ? '' : close}</div>
+      <div class="sheet-head"><h2 id="item-title">${esc(item.name)}</h2>${item.photo ? '' : close}</div>
       ${item.description ? `<p class="sheet-desc">${esc(item.description)}</p>` : ''}
       ${groups}
       <div class="field">
