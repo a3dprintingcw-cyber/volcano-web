@@ -1323,7 +1323,25 @@ export default {
       if (CUSTOMER_PAGES.has(url.pathname) && beforeLaunch(env) && !(await sessionRole(request, env))) {
         return comingSoon(request, env);
       }
-      return env.ASSETS.fetch(request);
+      const page = await env.ASSETS.fetch(request);
+      // Opened for the rooftop: mark the page before it arrives, so it never flashes the
+      // Street Food look first while the script loads.
+      if ((url.pathname === '/' || url.pathname === '/index.html') && url.searchParams.get('venue') === 'rooftop' && page.ok) {
+        return new HTMLRewriter()
+          .on('body', { element: (el) => el.setAttribute('data-venue', 'rooftop') })
+          .on('img.logo', { element: (el) => { el.setAttribute('src', '/img/logo-experience.webp'); el.setAttribute('alt', 'Volcano Experience'); } })
+          .on('#hero-title', { element: (el) => el.setInnerContent('Premium flavors.<br>Street energy.', { html: true }) })
+          .on('button[data-venue="street"]', { element: (el) => el.setAttribute('aria-pressed', 'false') })
+          .on('button[data-venue="rooftop"]', { element: (el) => el.setAttribute('aria-pressed', 'true') })
+          .on('#phone-link, #foot-phone', {
+            element: (el) => {
+              el.setAttribute('href', 'tel:+59995642266');
+              el.setInnerContent('+599 9 564 2266');
+            },
+          })
+          .transform(page);
+      }
+      return page;
     }
     try {
       return await handleApi(request, env, url, ctx);
