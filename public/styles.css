@@ -380,8 +380,9 @@ body[data-venue="rooftop"] {
   --coal: #0c0c0c;
   --char: #181716;
   --ember: #2e2b29;
-  --lava: #c8102e;
-  --lava-deep: #8e0b20;
+  --lava: #a43b25;
+  --lava-deep: #7f2a19;
+  --magma: #e0553a; /* the rooftop's accent: the "Eruption of flavors" red instead of yellow */
   --drip-red: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='360' height='70' viewBox='0 0 360 70'%3E%3Cpath fill='%23c8102e' d='M0 0h360v14c-8 0-12 5-12 12v18c0 9-14 9-14 0V30c0-8-5-13-13-13s-13 5-13 13v6c0 8-12 8-12 0v-8c0-8-6-12-15-12s-15 5-15 13v30c0 11-18 11-18 0V30c0-9-6-14-16-14s-16 5-16 13v10c0 8-13 8-13 0v-9c0-8-7-13-17-13s-17 5-17 13v22c0 10-16 10-16 0V31c0-9-7-15-18-15s-18 6-18 15v4c0 8-12 8-12 0v-5c0-9-8-14-19-14S31 21 31 30v16c0 9-14 9-14 0V28C17 20 10 14 0 14z'/%3E%3C/svg%3E");
   background: var(--coal);
 }
@@ -404,3 +405,25 @@ body[data-venue="rooftop"] .foot { background: #000; box-shadow: inset 0 2px 0 #
 body[data-venue="rooftop"] .drip { position: relative; overflow: hidden; }
 body[data-venue="rooftop"] .drip.is-burning { background: #000; }
 .drip .fire { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+
+/* Rooftop accents: where Street Food is yellow with dark text, the rooftop is
+   "Eruption of flavors" red with cream text, and titles get the cream outline like the motto. */
+body[data-venue="rooftop"] .btn-primary,
+body[data-venue="rooftop"] .tracker,
+body[data-venue="rooftop"] .cats button[aria-selected='true'],
+body[data-venue="rooftop"] .item-add,
+body[data-venue="rooftop"] .cartbar,
+body[data-venue="rooftop"] .venues button[aria-pressed="true"],
+body[data-venue="rooftop"] .extra-price b,
+body[data-venue="rooftop"] .skip { background: var(--lava); color: var(--ash); }
+body[data-venue="rooftop"] .btn-primary { box-shadow: 0 4px 0 var(--lava-deep); }
+body[data-venue="rooftop"] .btn-primary:active { box-shadow: 0 2px 0 var(--lava-deep); }
+body[data-venue="rooftop"] .cartbar { box-shadow: 0 4px 0 var(--lava-deep), 0 12px 30px rgba(0, 0, 0, 0.55); }
+body[data-venue="rooftop"] .cartbar-count { background: var(--ash); color: var(--lava); }
+body[data-venue="rooftop"] .section > h2 {
+  color: var(--lava);
+  -webkit-text-stroke: 1.5px var(--ash);
+  paint-order: stroke fill;
+  text-shadow: 0 3px 0 rgba(0, 0, 0, 0.45);
+}
+body[data-venue="rooftop"] .hero h1 { color: var(--lava); }
