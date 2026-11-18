@@ -1,4 +1,4 @@
-// Smooth value noise, shared by the header effects (fire.js and lava.js).
+// Smooth value noise, shared by the header effects (fire.js).
 // Same input, same output: the patterns are fixed, only time makes them move.
 
 const PERM = new Uint8Array(512);

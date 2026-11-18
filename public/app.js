@@ -66,22 +66,23 @@ function applyVenue() {
   updateFire();
 }
 
-// Live header effects: lava dripping for Street Food (lava.js), fire for the rooftop (fire.js).
-// The drawn drip and flames in the CSS stay underneath until the live one is running.
+// Live fire in the rooftop header (fire.js). Street Food keeps its drawn lava drip.
+// The drawn flames in the CSS stay underneath until the live fire is running.
 let header = { venue: null, stop: null };
 function updateFire() {
   if (header.venue === venue) return;
   const drip = document.querySelector('.drip');
   if (typeof header.stop === 'function') header.stop();
-  drip.classList.remove('is-burning', 'is-melting', 'is-live');
+  drip.classList.remove('is-burning', 'is-live');
   const mine = { venue, stop: null };
   header = mine;
-  const load = venue === 'rooftop' ? import('/fire.js').then((m) => m.startFire) : import('/lava.js').then((m) => m.startLava);
-  load
+  if (venue !== 'rooftop') return;
+  import('/fire.js')
+    .then((m) => m.startFire)
     .then((start) => {
       if (header !== mine) return; // switched again while loading
       mine.stop = start(drip);
-      drip.classList.add('is-live', venue === 'rooftop' ? 'is-burning' : 'is-melting');
+      drip.classList.add('is-live', 'is-burning');
     })
     .catch(() => {
       /* the drawn drip or flames stay as they are */
