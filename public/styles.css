@@ -403,7 +403,7 @@ body[data-venue="rooftop"] .foot { background: #000; box-shadow: inset 0 2px 0 #
 
 /* Live fire (fire.js) replaces the drawn flames once it is running. */
 body[data-venue="rooftop"] .drip { position: relative; overflow: hidden; }
-body[data-venue="rooftop"] .drip.is-burning { background: #000; }
+body[data-venue="rooftop"] .drip.is-burning { background: transparent; }
 .drip .fire { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 
 /* Rooftop accents: where Street Food is yellow with dark text, the rooftop is
@@ -427,3 +427,22 @@ body[data-venue="rooftop"] .section > h2 {
   text-shadow: 0 3px 0 rgba(0, 0, 0, 0.45);
 }
 body[data-venue="rooftop"] .hero h1 { color: var(--lava); }
+
+/* Rooftop header, tidied: one black band, no empty gap. The fire sits right under the phone
+   and status line, its embers glow and fade into the page instead of ending in a hard edge. */
+body[data-venue="rooftop"] .top { background: var(--coal); }
+body[data-venue="rooftop"] .top-bar { background: transparent; position: relative; z-index: 2; padding-bottom: 0.4rem; }
+body[data-venue="rooftop"] .status::before { background: #4a4542; }
+body[data-venue="rooftop"] .status.is-open::before { background: #ff7a1a; box-shadow: 0 0 8px #ff7a1a; }
+body[data-venue="rooftop"] .drip {
+  height: 84px;
+  margin-top: -30px;
+  background-color: transparent;
+  -webkit-mask-image: linear-gradient(to bottom, #000 90%, transparent);
+  mask-image: linear-gradient(to bottom, #000 90%, transparent);
+}
+body[data-venue="rooftop"] .top::after {
+  content: ''; position: absolute; left: 0; right: 0; top: 100%; height: 34px; pointer-events: none;
+  background: radial-gradient(ellipse 70% 100% at 50% 0, rgba(255, 110, 20, 0.18), transparent 70%);
+}
+body[data-venue="rooftop"] .hero { margin-top: 0.75rem; }
