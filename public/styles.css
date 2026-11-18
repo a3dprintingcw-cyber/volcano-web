@@ -372,3 +372,102 @@ body[data-venue="rooftop"] .logo { width: 14rem; margin: 0.5rem 0 0.75rem; }
   body[data-venue="rooftop"] .hero-text { text-align: center; justify-items: center; }
   body[data-venue="rooftop"] .logo { width: 16rem; margin-left: 0; }
 }
+
+/* =====================================================================
+   Volcano Experience (rooftop): sushi style.
+   Black lacquer, gold, a seigaiha wave instead of the lava drip,
+   Shippori Mincho for headings, a red seal for the add button.
+   Only applies with body[data-venue="rooftop"]; Street Food is untouched.
+   ===================================================================== */
+@font-face { font-family: 'Shippori Mincho B1'; src: url('/fonts/shippori-mincho-b1-latin-600-normal.woff2') format('woff2'); font-weight: 600; font-display: swap; }
+@font-face { font-family: 'Shippori Mincho B1'; src: url('/fonts/shippori-mincho-b1-latin-800-normal.woff2') format('woff2'); font-weight: 800; font-display: swap; }
+
+body[data-venue="rooftop"] {
+  --sushi-bg: #0c0c0c;
+  --sushi-panel: #151413;
+  --sushi-line: rgba(253, 180, 41, 0.22);
+  --sushi-red: #c8102e;
+  --sushi-red-deep: #8e0b20;
+  --mincho: 'Shippori Mincho B1', 'Hiragino Mincho ProN', 'Yu Mincho', Georgia, serif;
+  --wave: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='24' viewBox='0 0 48 24'%3E%3Cg fill='%230c0c0c' stroke='%23fdb429' stroke-opacity='0.35' stroke-width='1.2'%3E%3Cg id='w'%3E%3Ccircle r='22'/%3E%3Ccircle r='16'/%3E%3Ccircle r='10'/%3E%3Ccircle r='4'/%3E%3C/g%3E%3Cuse href='%23w' x='0' y='12'/%3E%3Cuse href='%23w' x='48' y='12'/%3E%3Cuse href='%23w' x='24' y='24'/%3E%3C/g%3E%3C/svg%3E");
+  background: var(--sushi-bg);
+}
+
+/* Top: black bar, then a band of waves with a thin gold line */
+body[data-venue="rooftop"] .top-bar { background: #000; }
+body[data-venue="rooftop"] .drip { height: 34px; background: var(--wave) repeat-x center bottom / 48px 24px; border-bottom: 1px solid var(--sushi-line); margin-top: 0; }
+body[data-venue="rooftop"] .lang { border-color: var(--sushi-line); }
+body[data-venue="rooftop"] .hero { margin-top: 1rem; }
+
+/* Hero */
+.roof-kicker { display: none; }
+body[data-venue="rooftop"] .roof-kicker {
+  display: flex; align-items: center; gap: 0.6rem; margin: 0.4rem 0 0;
+  color: var(--magma); font-weight: 600; font-size: 0.8rem; letter-spacing: 0.28em; text-transform: uppercase;
+}
+body[data-venue="rooftop"] .roof-kicker span {
+  display: grid; place-items: center; width: 2.1rem; height: 2.1rem; border-radius: 0.35rem;
+  background: var(--sushi-red); color: #fff; letter-spacing: 0; font-size: 0.8rem; font-family: var(--mincho); font-weight: 800;
+  writing-mode: vertical-rl; line-height: 1;
+}
+body[data-venue="rooftop"] .hero h1 {
+  font-family: var(--mincho); font-weight: 800; text-transform: none; letter-spacing: 0.01em;
+  color: var(--ash); -webkit-text-stroke: 0; text-shadow: none; font-size: clamp(2rem, 8vw, 3.6rem);
+}
+body[data-venue="rooftop"] .hero h1::after { content: ''; display: block; width: 3.5rem; height: 2px; margin: 0.8rem auto 0; background: var(--magma); }
+body[data-venue="rooftop"] .btn-primary { box-shadow: none; }
+body[data-venue="rooftop"] .btn-erupt { border-width: 1px; }
+body[data-venue="rooftop"] .venues { background: var(--sushi-panel); border-color: var(--sushi-line); }
+
+/* Notices */
+body[data-venue="rooftop"] .notice { background: var(--sushi-panel); border: 1px solid var(--sushi-red); border-left-width: 4px; border-radius: 0.4rem; }
+
+/* Menu tabs: underlined, like a printed menu */
+body[data-venue="rooftop"] .cats { background: var(--sushi-bg); border-bottom: 1px solid var(--sushi-line); gap: 0.2rem; }
+body[data-venue="rooftop"] .cats button {
+  background: transparent; border-radius: 0; color: var(--smoke);
+  font-family: var(--mincho); font-weight: 600; font-size: 1.02rem; border-bottom: 2px solid transparent;
+}
+body[data-venue="rooftop"] .cats button[aria-selected='true'] { background: transparent; color: var(--magma); border-bottom-color: var(--magma); }
+
+/* Sections and dishes */
+body[data-venue="rooftop"] .section > h2 {
+  font-family: var(--mincho); font-weight: 800; text-transform: none; color: var(--ash);
+  display: flex; align-items: center; gap: 0.9rem;
+}
+body[data-venue="rooftop"] .section > h2::after { content: ''; flex: 1; height: 1px; background: var(--sushi-line); }
+body[data-venue="rooftop"] .section-note { color: var(--magma); letter-spacing: 0.18em; text-transform: uppercase; font-size: 0.8rem; font-weight: 600; }
+body[data-venue="rooftop"] .item {
+  background: var(--sushi-panel); border: 1px solid var(--sushi-line); border-radius: 0.5rem; min-height: 6rem;
+}
+body[data-venue="rooftop"] .item:hover { border-color: var(--magma); }
+body[data-venue="rooftop"] .item-name { font-family: var(--mincho); font-weight: 800; text-transform: none; font-size: 1.15rem; letter-spacing: 0.01em; }
+body[data-venue="rooftop"] .item-add {
+  background: var(--sushi-red); color: #fff; border-radius: 0.35rem; font-family: var(--body); font-weight: 700; font-size: 1.4rem;
+}
+.item-tags { display: flex; flex-wrap: wrap; gap: 0.3rem; margin: 0.1rem 0 0.1rem; }
+.tag { font-size: 0.68rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; padding: 0.1rem 0.45rem; border-radius: 0.2rem; border: 1px solid; }
+.tag-raw { color: #ff6b7d; border-color: rgba(255, 107, 125, 0.5); }
+.tag-cooked { color: var(--magma); border-color: rgba(253, 180, 41, 0.45); }
+.tag-vegetarian { color: #8fd694; border-color: rgba(143, 214, 148, 0.5); }
+
+/* Order bar and the dish and order sheets */
+body[data-venue="rooftop"] .cartbar { background: var(--sushi-red); color: #fff; box-shadow: 0 12px 30px rgba(0, 0, 0, 0.6); border-radius: 0.6rem; }
+body[data-venue="rooftop"] .cartbar-count { background: #fff; color: var(--sushi-red-deep); border-radius: 0.3rem; }
+body[data-venue="rooftop"] .sheet { background: #f7f1e3; border-radius: 0.8rem 0.8rem 0 0; }
+body[data-venue="rooftop"] .sheet-foot { background: #f7f1e3; }
+body[data-venue="rooftop"] .sheet-head h2 { font-family: var(--mincho); font-weight: 800; text-transform: none; color: #111; }
+body[data-venue="rooftop"] .sheet .btn-primary { background: var(--sushi-red); color: #fff; box-shadow: none; border-radius: 0.5rem; }
+body[data-venue="rooftop"] .sheet .btn-primary[disabled] { background: #c9b9a2; color: #7a6a58; }
+@media (min-width: 46rem) { body[data-venue="rooftop"] .sheet { border-radius: 0.8rem; } }
+
+/* Footer: black with waves on top */
+body[data-venue="rooftop"] .foot { background: #000; border-top: 1px solid var(--sushi-line); position: relative; }
+body[data-venue="rooftop"] .foot::before { content: ''; position: absolute; left: 0; right: 0; top: -25px; height: 24px; background: var(--wave) repeat-x center bottom / 48px 24px; }
+body[data-venue="rooftop"] .foot h2 { font-family: var(--mincho); font-weight: 800; text-transform: none; color: var(--magma); }
+body[data-venue="rooftop"] .foot-bottom { border-top-color: var(--sushi-line); color: var(--smoke); }
+body[data-venue="rooftop"] .foot .muted { color: var(--smoke); }
+body[data-venue="rooftop"] .sheet-head h2 .tag { font-family: var(--body); font-size: 0.7rem; vertical-align: middle; }
+body[data-venue="rooftop"] .sheet .tag-raw { color: var(--sushi-red); border-color: rgba(200, 16, 46, 0.5); }
+body[data-venue="rooftop"] .sheet .tag-cooked { color: #8a5a00; border-color: rgba(138, 90, 0, 0.45); }
+body[data-venue="rooftop"] .sheet .tag-vegetarian { color: #2e7d32; border-color: rgba(46, 125, 50, 0.5); }

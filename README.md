@@ -147,4 +147,4 @@ Photos live in `public/img/` as `name-420.webp` (list) and `name-900.webp` (deta
 
 ## Fonts
 
-Bowlby One and Barlow are served from `public/fonts/`. Both are under the SIL Open Font License.
+Bowlby One, Barlow and Shippori Mincho B1 (rooftop headings) are served from `public/fonts/`. All are under the SIL Open Font License.
