@@ -6,6 +6,7 @@ import { availability, describeHours, localClock } from './hours.js';
 import { dayReport, parseRecipients, reportEmail, reportReady, sendDueReport, sendReport } from './report.js';
 import { notificationFor, notifyOrder, validEndpoint, vapidKeys } from './push.js';
 import { handleCloudPrnt, printerStatus, queueReprint } from './cloudprnt.js';
+import { handleEpson } from './epson.js';
 import { customerList, dashboardStats, forgetOldVisits, orderList, readRange, recordVisit } from './stats.js';
 import {
   PAYMENT_MINUTES,
@@ -886,6 +887,11 @@ async function handleApi(request, env, url, ctx) {
     }
     return json({ error: 'Not found' }, 404);
   }
+  // The rooftop's Epson (Server Direct Print). Same secret link as the rooftop printer, other path.
+  if ((match = path.match(/^\/api\/epson\/([a-f0-9]{32})$/))) {
+    if (match[1] !== (await printerKey(env, 'rooftop'))) return json({ error: 'Not found' }, 404);
+    return handleEpson(request, db, loadOrders, await loadSettings(db, 'rooftop'), 'rooftop');
+  }
 
   // Public
   if (path === '/api/menu' && method === 'GET') {
@@ -1190,7 +1196,12 @@ async function handleApi(request, env, url, ctx) {
       url: `${url.origin}/api/cloudprnt/${await printerKey(env)}`,
       ...(await printerStatus(db)),
       // The rooftop's own printer: a second Star printer with its own link.
-      rooftop: { url: `${url.origin}/api/cloudprnt/${await printerKey(env, 'rooftop')}`, ...(await printerStatus(db, 'rooftop')) },
+      rooftop: {
+        url: `${url.origin}/api/cloudprnt/${await printerKey(env, 'rooftop')}`,
+        // The rooftop sushi printer is an Epson: it uses this link (Server Direct Print) instead.
+        epson_url: `${url.origin}/api/epson/${await printerKey(env, 'rooftop')}`,
+        ...(await printerStatus(db, 'rooftop')),
+      },
     });
   }
   if (path === '/api/admin/sales' && method === 'GET') {

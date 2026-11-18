@@ -15,7 +15,7 @@ const WIDTH = 48; // characters per line on 80 mm paper
 const PRINTABLE = "status IN ('new','preparing','ready','done')";
 const KEEP_IDS = 300;
 
-async function getSetting(db, key, fallback) {
+export async function getSetting(db, key, fallback) {
   const row = await db.prepare('SELECT value FROM settings WHERE key = ?').bind(key).first();
   if (!row) return fallback;
   try {
@@ -27,9 +27,9 @@ async function getSetting(db, key, fallback) {
 
 // The rooftop (Volcano Experience) has its own printer. Its bookkeeping is kept under
 // its own keys, so the two printers never take each other's orders.
-const pk = (venue, key) => (venue === 'rooftop' ? `rooftop_${key}` : key);
+export const pk = (venue, key) => (venue === 'rooftop' ? `rooftop_${key}` : key);
 
-async function putSetting(db, key, value) {
+export async function putSetting(db, key, value) {
   await db
     .prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value')
     .bind(key, JSON.stringify(value))
@@ -49,7 +49,7 @@ async function startTime(db, venue) {
 
 // Every order prints twice: the kitchen ticket ("k:<id>"), then the customer receipt ("r:<id>").
 // Receipts start with orders placed after this feature went live, so nothing old prints.
-async function nextJob(db, venue) {
+export async function nextJob(db, venue) {
   const since = await startTime(db, venue);
   let receiptSince = await getSetting(db, pk(venue, 'cloudprnt_receipt_since'), null);
   if (!receiptSince) {
@@ -73,7 +73,7 @@ async function nextJob(db, venue) {
   return null;
 }
 
-const parseJob = (token) => {
+export const parseJob = (token) => {
   const m = /^([kr]):(.+)$/.exec(token || '');
   return m ? { kind: m[1], id: m[2] } : { kind: 'k', id: token };
 };
@@ -85,7 +85,7 @@ export async function queueReprint(db, orderId, kind, venue = 'street') {
   await putSetting(db, pk(venue, 'cloudprnt_reprint'), again.slice(-20));
 }
 
-async function markPrinted(db, token, venue) {
+export async function markPrinted(db, token, venue) {
   // A reprint is done once printed: take it off the queue.
   const again = await getSetting(db, pk(venue, 'cloudprnt_reprint'), []);
   const i = again.indexOf(token);
@@ -100,7 +100,7 @@ async function markPrinted(db, token, venue) {
 }
 
 // Remember when the printer last checked in, at most once a minute.
-async function noteSeen(db, status, venue) {
+export async function noteSeen(db, status, venue) {
   const seen = await getSetting(db, pk(venue, 'cloudprnt_seen'), null);
   const now = Date.now();
   if (seen && now - seen.at < 60_000 && seen.status === status) return;
@@ -254,7 +254,7 @@ export function receiptText(order, offsetMinutes) {
   out.push(cols('9,00%:', amt(net), amt(order.total_cents - net), amt(order.total_cents)));
   out.push(rule());
   out.push('');
-  out.push(center('Eruption of Flavors!'));
+  out.push(center(order.venue === 'rooftop' ? 'Premium flavors. Street energy.' : 'Eruption of Flavors!'));
   out.push('');
   out.push(order.venue === 'rooftop' ? 'VOLCANO EXPERIENCE' : 'VOLCANO STREET FOOD', 'Rooseveltweg 271', 'Willemstad, Curacao', order.venue === 'rooftop' ? '+5999 564 2266' : '+5999 565 2266', 'CRIB : 102.673.913');
   out.push('', '');

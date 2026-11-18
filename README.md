@@ -56,7 +56,7 @@ The site takes orders for two places: Volcano Street Food (downstairs) and Volca
 | Customers | `/` | `/?venue=rooftop` (short: `/rooftop`), or the switch at the top of the home page |
 | Kitchen board | `/kitchen/?venue=street` | `/kitchen/?venue=rooftop`. A screen remembers its venue |
 | Manager page | `/admin/`, picker "Street Food" | `/admin/`, picker "Experience" |
-| Printer | its CloudPRNT link (Settings) | its own CloudPRNT link (Settings, with Experience picked) |
+| Printer | Star TSP143IV, CloudPRNT link (Settings) | Epson TM-m30II "Sushi Printer Rooftop" (192.168.0.24), Server Direct Print link `/api/epson/...` (Settings, with Experience picked). A Star CloudPRNT link exists too |
 | Menu source | `menu/menu.mjs`, `npm run menu:reload:remote` | `menu/rooftop.mjs`, `npm run rooftop:reload:remote` |
 
 - Each venue has its own opening hours, wait time, pause, busy and closed today switches. The rooftop keeps them in the settings key `rooftop`. The rooftop has its own phone number (+599 9 564 2266). The day report email is shared.

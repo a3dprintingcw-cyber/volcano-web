@@ -791,11 +791,17 @@ function settingsView() {
   const ago = seen ? Math.round((Date.now() - seen) / 60000) : null;
   return `${head('Settings', 'Printer, reports and figures')}
     <div class="grid grid-2">
-      <section class="card-p"><h2>${isRoof() ? 'Rooftop printer' : 'Kitchen printer'}</h2><p class="sub">${isRoof() ? 'The rooftop has its own Star printer with its own link. It prints only Volcano Experience orders' : 'The Star printer prints every website order by itself: a kitchen ticket, then the customer receipt'}</p>
+      <section class="card-p"><h2>${isRoof() ? 'Rooftop printer' : 'Kitchen printer'}</h2><p class="sub">${isRoof() ? 'The Epson sushi printer upstairs prints the Volcano Experience website orders, next to the Lightspeed ones' : 'The Star printer prints every website order by itself: a kitchen ticket, then the customer receipt'}</p>
         ${
           p
-            ? `<div class="form"><label class="m-field">Printer link <small>In the printer's settings, switch on CloudPRNT and paste this as the server URL. Keep it private.</small>
-                <input type="text" readonly value="${esc(p.url)}" data-select></label>
+            ? `<div class="form">${
+                isRoof() && p.epson_url
+                  ? `<label class="m-field">Epson printer link (Sushi Printer Rooftop) <small>In the Epson's settings page, Server Direct Print: switch it on and paste this as the URL. Keep it private.</small>
+                <input type="text" readonly value="${esc(p.epson_url)}" data-select></label>
+                <details class="dish-more"><summary>Star printer instead</summary><label class="m-field">Star CloudPRNT link <input type="text" readonly value="${esc(p.url)}" data-select></label></details>`
+                  : `<label class="m-field">Printer link <small>In the printer's settings, switch on CloudPRNT and paste this as the server URL. Keep it private.</small>
+                <input type="text" readonly value="${esc(p.url)}" data-select></label>`
+              }
               <p><b>${!seen ? 'Not connected yet.' : ago <= 2 ? `Connected, last checked in at ${seen.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: TZ })}.` : `Not heard from since ${fmtStamp(Math.round(p.last_seen / 1000))}. Is the printer on?`}</b>
                 ${p.last_status ? ` Printer says: ${esc(p.last_status)}.` : ''} Tickets printed: ${num(p.printed)}.</p></div>`
             : '<p class="m-empty">Printer status could not be loaded.</p>'
