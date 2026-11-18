@@ -399,3 +399,8 @@ body[data-venue="rooftop"] .drip {
 }
 body[data-venue="rooftop"] .hero { margin-top: 0.5rem; }
 body[data-venue="rooftop"] .foot { background: #000; box-shadow: inset 0 2px 0 #ff1a3c, inset 0 22px 26px -20px rgba(255, 26, 60, 0.6); }
+
+/* Live fire (fire.js) replaces the drawn flames once it is running. */
+body[data-venue="rooftop"] .drip { position: relative; overflow: hidden; }
+body[data-venue="rooftop"] .drip.is-burning { background: #000; }
+.drip .fire { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }

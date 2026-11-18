@@ -63,6 +63,29 @@ function applyVenue() {
   $('copyright').textContent = `© 2026 ${v.logoAlt}`;
   $('about-2').textContent = t(venue === 'rooftop' ? 'rooftop.about_2' : 'foot.about_2');
   for (const button of document.querySelectorAll('[data-venue]')) button.setAttribute('aria-pressed', String(button.dataset.venue === venue));
+  updateFire();
+}
+
+// Live fire in the rooftop header (see fire.js). Loaded only for the rooftop.
+let stopFire = null;
+function updateFire() {
+  const drip = document.querySelector('.drip');
+  if (venue === 'rooftop' && !stopFire) {
+    stopFire = 'loading';
+    import('/fire.js')
+      .then(({ startFire }) => {
+        if (venue !== 'rooftop' || stopFire !== 'loading') return;
+        stopFire = startFire(drip);
+        drip.classList.add('is-burning');
+      })
+      .catch(() => {
+        stopFire = null; // the drawn flames stay as they are
+      });
+  } else if (venue !== 'rooftop' && stopFire) {
+    if (typeof stopFire === 'function') stopFire();
+    stopFire = null;
+    drip.classList.remove('is-burning');
+  }
 }
 
 function switchVenue(next) {
