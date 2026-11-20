@@ -139,6 +139,7 @@ function card(order, column, serverTime) {
       </div>
       <div class="card-foot card-foot-links">
         ${printLinks(order.id)}
+        <button class="link" type="button" data-print-here>Print here (tablet)</button>
         ${column.back ? `<button class="link" type="button" data-status="${column.back}">Move back</button>` : ''}
         <button class="link link-end" type="button" data-cancel>${confirming ? 'Tap again to cancel this order' : 'Cancel order'}</button>
       </div>
@@ -249,6 +250,45 @@ async function reprint(id, kind) {
   }, 5000);
 }
 
+// Backup printing: the tablet prints the kitchen ticket itself through its own print dialog
+// (AirPrint or the Star app), over the restaurant's network. For when the Star printer can't
+// reach the website (CloudPRNT offline) but still prints locally, as it does for Lightspeed.
+function printHere(id) {
+  const order = state.data.orders.find((o) => o.id === id);
+  if (!order) return;
+  let slip = document.getElementById('print-slip');
+  if (!slip) {
+    slip = document.createElement('div');
+    slip.id = 'print-slip';
+    document.body.appendChild(slip);
+  }
+  const method = order.payment_method === 'sentoo' ? 'PAID ONLINE' : order.payment_method === 'cash' ? 'CASH' : order.payment_method === 'card' ? 'CARD' : '';
+  slip.innerHTML = `
+    <p class="slip-venue">${VENUE_LABEL[VENUE].toUpperCase()}</p>
+    <p class="slip-number">#${order.number}</p>
+    <p class="slip-who">${esc(order.customer_name)}</p>
+    <p class="slip-time">Pickup ${clockTime(order.pickup_at)}</p>
+    ${method ? `<p class="slip-method">${method}${order.payment_status === 'paid' && order.payment_method !== 'sentoo' ? ' (paid)' : ''}</p>` : ''}
+    <ul class="slip-lines">
+      ${order.items
+        .map(
+          (l) => `<li><b>${l.quantity} × ${esc(l.name)}</b>
+            ${l.options.length ? `<span>${esc(l.options.join(', '))}</span>` : ''}
+            ${l.note ? `<span class="slip-note">Note: ${esc(l.note)}</span>` : ''}</li>`
+        )
+        .join('')}
+    </ul>
+    ${order.notes ? `<p class="slip-note">${esc(order.notes)}</p>` : ''}
+    <p class="slip-phone">${esc(order.phone || '')}</p>`;
+  document.body.classList.add('printing');
+  const done = () => document.body.classList.remove('printing');
+  window.addEventListener('afterprint', done, { once: true });
+  setTimeout(() => {
+    window.print();
+    setTimeout(done, 1500);
+  }, 50);
+}
+
 async function refresh() {
   try {
     const data = await api(`/api/staff/orders?venue=${VENUE}`);
@@ -305,6 +345,7 @@ app.addEventListener('click', (event) => {
   }
   if (!id) return;
   if (target.dataset.reprint) return reprint(id, target.dataset.reprint);
+  if ('printHere' in target.dataset) return printHere(id);
   if ('cancel' in target.dataset) {
     if (state.confirmCancel !== id) {
       state.confirmCancel = id;

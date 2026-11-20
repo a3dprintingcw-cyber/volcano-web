@@ -139,3 +139,22 @@ body[data-venue="rooftop"] .pill { border-color: var(--magma); color: var(--magm
 body[data-venue="rooftop"] .pill.is-on { background: var(--magma); color: var(--ink); }
 body[data-venue="rooftop"] .pill.is-warn { background: var(--lava); border-color: var(--lava); color: var(--ash); }
 body[data-venue="rooftop"] .card .btn-primary { background: #111; color: var(--magma); box-shadow: 0 3px 0 #000; }
+
+/* Backup printing from the tablet ("Print here"): only the ticket goes to the printer. */
+#print-slip { display: none; }
+@media print {
+  @page { size: 80mm auto; margin: 3mm; }
+  body.printing > *:not(#print-slip) { display: none !important; }
+  body.printing { background: #fff !important; color: #000 !important; margin: 0; padding: 0; }
+  body.printing #print-slip { display: block; width: 72mm; font-family: Helvetica, Arial, sans-serif; color: #000; }
+  #print-slip p { margin: 0 0 2mm; }
+  #print-slip .slip-venue { font-size: 10pt; font-weight: 700; text-align: center; }
+  #print-slip .slip-number { font-size: 36pt; font-weight: 900; text-align: center; line-height: 1; }
+  #print-slip .slip-who { font-size: 16pt; font-weight: 700; text-align: center; }
+  #print-slip .slip-time, #print-slip .slip-method { font-size: 13pt; font-weight: 700; text-align: center; }
+  #print-slip .slip-lines { list-style: none; padding: 0; margin: 3mm 0; border-top: 1px solid #000; }
+  #print-slip .slip-lines li { padding: 2mm 0; border-bottom: 1px dashed #000; font-size: 14pt; }
+  #print-slip .slip-lines span { display: block; font-size: 11pt; font-weight: 700; }
+  #print-slip .slip-note { font-size: 12pt; font-weight: 700; border: 2px solid #000; padding: 1.5mm; }
+  #print-slip .slip-phone { font-size: 10pt; text-align: center; }
+}
