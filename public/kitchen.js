@@ -30,27 +30,41 @@ const COLUMNS = [
   { status: 'ready', title: 'Ready for pickup', empty: 'Nothing waiting for pickup.', next: 'done', action: 'Picked up', back: 'preparing' },
 ];
 const state = { data: null, seen: null, fresh: new Set(), confirmCancel: null, offline: false, sound: store.get('volcano_sound', true), doneOpen: false, blocked: false };
-let audio = null;
+let unlocked = false; // the alarm has been played once after a tap
 
 // The alarm: loud, and it keeps ringing until every new order has been started.
+// It plays a sound file through an <audio> element: on an iPad this still sounds when the
+// mute switch or Control Centre mute is on (Web Audio does not), and it survives the
+// tablet going to sleep. If the browser refuses to play, the board asks for one tap.
+const alarm = new Audio('/alarm.wav');
+alarm.preload = 'auto';
+try {
+  // Safari 17+: treat this page's sound as media playback, not as a muted "ambient" sound.
+  if (navigator.audioSession) navigator.audioSession.type = 'playback';
+} catch {
+  /* older browser */
+}
 function beep() {
   if (!state.sound) return;
   try {
-    audio = audio || new AudioContext();
-    // Browsers keep sound off until the page has been tapped once.
-    state.blocked = audio.state === 'suspended';
-    if (state.blocked) return;
-    [0, 0.22, 0.44, 0.9, 1.12, 1.34].forEach((delay, i) => {
-      const osc = audio.createOscillator();
-      const gain = audio.createGain();
-      osc.type = 'square';
-      osc.frequency.value = i % 3 === 2 ? 1320 : 990;
-      gain.gain.setValueAtTime(0.6, audio.currentTime + delay);
-      gain.gain.exponentialRampToValueAtTime(0.001, audio.currentTime + delay + 0.2);
-      osc.connect(gain).connect(audio.destination);
-      osc.start(audio.currentTime + delay);
-      osc.stop(audio.currentTime + delay + 0.22);
-    });
+    alarm.currentTime = 0;
+    const played = alarm.play();
+    if (played && played.then) {
+      played.then(
+        () => {
+          if (state.blocked) {
+            state.blocked = false;
+            if (state.data) render();
+          }
+        },
+        () => {
+          if (!state.blocked) {
+            state.blocked = true;
+            if (state.data) render();
+          }
+        }
+      );
+    }
   } catch {
     /* no sound on this device */
   }
@@ -61,21 +75,32 @@ setInterval(() => {
   if (waitingOrders() > 0) beep();
 }, 4000);
 
-// The first tap anywhere unlocks sound.
+// The first tap anywhere unlocks sound: play the alarm once silently, so later plays are allowed.
 document.addEventListener(
   'pointerdown',
   () => {
-    if (!state.sound) return;
+    if (!state.sound || (!state.blocked && unlocked)) return;
+    unlocked = true;
     try {
-      audio = audio || new AudioContext();
-      audio.resume().then(() => {
-        if (state.blocked) {
-          state.blocked = false;
-          if (state.data) render();
-        }
-      });
+      alarm.muted = true;
+      alarm.currentTime = 0;
+      alarm
+        .play()
+        .then(() => {
+          alarm.pause();
+          alarm.muted = false;
+          alarm.currentTime = 0;
+          if (state.blocked) {
+            state.blocked = false;
+            if (state.data) render();
+          }
+          if (waitingOrders() > 0) beep();
+        })
+        .catch(() => {
+          alarm.muted = false;
+        });
     } catch {
-      /* no sound on this device */
+      alarm.muted = false;
     }
   },
   true
