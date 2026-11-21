@@ -207,6 +207,11 @@ function render() {
           ? '<p class="offline" role="alert">Tap anywhere on this screen once to switch the alarm on.</p>'
           : ''
     }
+    ${
+      data.printer_last_seen && data.server_time * 1000 - data.printer_last_seen > 3 * 60_000
+        ? '<p class="offline" role="alert">The printer is offline: website orders are not printing. Turn the printer off and on. Until it is back, tap "Print here (tablet)" on each order.</p>'
+        : ''
+    }
     ${state.offline ? '<p class="offline" role="alert">No connection. Orders on screen may be out of date. Retrying…</p>' : ''}
     <div class="board ${fresh ? 'has-new' : ''}">
       ${COLUMNS.map((column) => {

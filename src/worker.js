@@ -1037,6 +1037,8 @@ async function handleApi(request, env, url, ctx) {
       busy_extra: BUSY_EXTRA_MINUTES,
       availability: availability(settings, Date.now()),
       server_time: now(),
+      // When the printer last checked in (ms), so the board can warn when tickets stop printing.
+      printer_last_seen: (await printerStatus(db, venue)).last_seen,
     });
   }
   // "Print again": the Star printer prints the kitchen ticket or the customer receipt once more.
